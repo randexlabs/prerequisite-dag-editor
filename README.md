@@ -10,6 +10,9 @@ A local-first visual editor for designing and navigating learning prerequisite g
 - Zustand
 - Zod
 - Vitest
+- ESLint
+- Prettier
+- Rustfmt + Clippy
 - pnpm
 
 ## Development
@@ -41,23 +44,40 @@ Run the desktop app:
 pnpm tauri dev
 ```
 
-Validate the application:
+## Quality checks
+
+Run the complete web and Rust validation suite:
 
 ```bash
 pnpm check
 ```
 
-Or run the checks separately:
+Run individual checks:
 
 ```bash
-pnpm design:check
+pnpm format
+pnpm format:check
+pnpm lint
+pnpm lint:fix
 pnpm test
 pnpm build
+pnpm rust:fmt
+pnpm rust:fmt:check
+pnpm rust:clippy
+pnpm rust:test
 pnpm audit
 pnpm audit:prod
 ```
 
+`pnpm check` uses the incremental Prettier check so legacy files can be migrated gradually. `pnpm format:check` checks every supported file when a full formatting audit is needed.
+
 Do not run `npm audit fix --force`; review and upgrade the affected direct dependency instead.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main` and can also be started manually. It has separate web and Rust jobs.
+
+The web job validates changed-file formatting, ESLint, Vitest, the design-token policy, TypeScript, and the Vite production build. The Rust job generates the Tauri icons, checks Rustfmt, runs Clippy with warnings denied, and runs `cargo test`.
 
 ## Topic operations
 
