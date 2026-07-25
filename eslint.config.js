@@ -27,10 +27,6 @@ export default tseslint.config(
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",
       "react-refresh/only-export-components": ["error", { allowConstantExport: true }],
-      "@typescript-eslint/consistent-type-imports": [
-        "error",
-        { fixStyle: "inline-type-imports", prefer: "type-imports" },
-      ],
     },
   },
   {
