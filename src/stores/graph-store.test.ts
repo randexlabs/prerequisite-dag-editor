@@ -7,25 +7,36 @@ const nodes: LearningNode[] = [
     id: "a",
     position: { x: 0, y: 0 },
     data: { label: "Topic A", status: "unknown" },
-    className: "topic-node topic-unknown",
+    selected: false,
   },
   {
     id: "b",
     position: { x: 200, y: 0 },
     data: { label: "Topic B", status: "learning" },
-    className: "topic-node topic-learning",
+    selected: false,
+  },
+  {
+    id: "c",
+    position: { x: 400, y: 0 },
+    data: { label: "Topic C", status: "mastered" },
+    selected: false,
   },
 ];
 
-const edges: PrerequisiteEdge[] = [{ id: "a-b", source: "a", target: "b" }];
+const edges: PrerequisiteEdge[] = [
+  { id: "a-b", source: "a", target: "b", selected: false },
+  { id: "b-c", source: "b", target: "c", selected: false },
+];
 
-describe("topic CRUD", () => {
+describe("graph editing", () => {
   beforeEach(() => {
     useGraphStore.setState({
       nodes: structuredClone(nodes),
       edges: structuredClone(edges),
-      selectedNodeId: "b",
       cycleMessage: null,
+      past: [],
+      future: [],
+      historyTransaction: null,
     });
   });
 
@@ -33,24 +44,76 @@ describe("topic CRUD", () => {
     const id = useGraphStore.getState().addNode();
     const state = useGraphStore.getState();
 
-    expect(state.nodes.some((node) => node.id === id)).toBe(true);
-    expect(state.selectedNodeId).toBe(id);
+    expect(state.nodes.some((node) => node.id === id && node.selected)).toBe(true);
+    expect(state.nodes.filter((node) => node.selected)).toHaveLength(1);
+    expect(state.past).toHaveLength(1);
   });
 
-  it("renames a topic and changes its status", () => {
-    useGraphStore.getState().updateNode("b", { label: "Renamed topic", status: "mastered" });
+  it("renames a topic and changes its status immediately", () => {
+    useGraphStore.getState().updateNode("b", {
+      label: "Renamed topic",
+      status: "mastered",
+    });
     const node = useGraphStore.getState().nodes.find((item) => item.id === "b");
 
     expect(node?.data).toEqual({ label: "Renamed topic", status: "mastered" });
-    expect(node?.className).toContain("topic-mastered");
+    expect(useGraphStore.getState().past).toHaveLength(1);
   });
 
-  it("deletes a topic and its incident connections", () => {
-    useGraphStore.getState().deleteNode("b");
+  it("supports additive and toggle selection without adding history", () => {
+    useGraphStore.getState().setSelectedNodes(["a"], "replace");
+    useGraphStore.getState().setSelectedNodes(["b"], "add");
+
+    expect(
+      useGraphStore.getState().nodes.filter((node) => node.selected).map((node) => node.id),
+    ).toEqual(["a", "b"]);
+
+    useGraphStore.getState().setSelectedNodes(["a"], "toggle");
+
+    expect(
+      useGraphStore.getState().nodes.filter((node) => node.selected).map((node) => node.id),
+    ).toEqual(["b"]);
+    expect(useGraphStore.getState().past).toHaveLength(0);
+  });
+
+  it("deletes multiple selected topics and their incident connections", () => {
+    useGraphStore.getState().setSelectedNodes(["a", "b"], "replace");
+    useGraphStore.getState().deleteSelected();
     const state = useGraphStore.getState();
 
-    expect(state.nodes.some((node) => node.id === "b")).toBe(false);
+    expect(state.nodes.map((node) => node.id)).toEqual(["c"]);
     expect(state.edges).toHaveLength(0);
-    expect(state.selectedNodeId).toBeNull();
+    expect(state.past).toHaveLength(1);
+  });
+
+  it("undoes and redoes graph changes", () => {
+    useGraphStore.getState().updateNode("b", { label: "Changed" });
+    useGraphStore.getState().undo();
+
+    expect(
+      useGraphStore.getState().nodes.find((node) => node.id === "b")?.data.label,
+    ).toBe("Topic B");
+
+    useGraphStore.getState().redo();
+
+    expect(
+      useGraphStore.getState().nodes.find((node) => node.id === "b")?.data.label,
+    ).toBe("Changed");
+  });
+
+  it("collapses a title editing transaction into one undo step", () => {
+    const store = useGraphStore.getState();
+    store.beginHistoryTransaction();
+    store.updateNode("b", { label: "C" });
+    store.updateNode("b", { label: "Ch" });
+    store.updateNode("b", { label: "Changed" });
+    store.endHistoryTransaction();
+
+    expect(useGraphStore.getState().past).toHaveLength(1);
+
+    useGraphStore.getState().undo();
+    expect(
+      useGraphStore.getState().nodes.find((node) => node.id === "b")?.data.label,
+    ).toBe("Topic B");
   });
 });
