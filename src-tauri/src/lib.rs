@@ -2,5 +2,8 @@
 pub fn run() {
     tauri::Builder::default()
         .run(tauri::generate_context!())
-        .expect("error while running Tauri application");
+        .unwrap_or_else(|error| {
+            eprintln!("error while running Tauri application: {error}");
+            std::process::exit(1);
+        });
 }
