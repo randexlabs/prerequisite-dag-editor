@@ -6,7 +6,7 @@ These instructions apply to the entire repository.
 
 - Use test-driven development for behavior changes: write or update a failing test first, implement the smallest change that makes it pass, then refactor while keeping the test suite green.
 - Run the relevant tests before concluding any task. For repository-wide changes, run `pnpm check`.
-- Do not report a task as complete while tests, type checking, the design-token check, or the build are failing. Fix failures introduced or exposed by the work before concluding.
+- Do not report a task as complete while formatting, linting, tests, type checking, the design-token check, or the build are failing. Fix failures introduced or exposed by the work before concluding.
 - Keep changes focused. Do not mix unrelated refactors or cleanup into a feature or fix.
 
 ## Commits
@@ -18,10 +18,12 @@ These instructions apply to the entire repository.
 
 ## Validation
 
-Before concluding work, run:
+Before concluding work, apply the formatters and run the complete validation suite:
 
 ```bash
+pnpm format
+pnpm rust:fmt
 pnpm check
 ```
 
-When iterating, run the narrowest relevant test first, then run the full check before completion.
+When iterating, run the narrowest relevant test first, then run the full check before completion. Do not bypass the frozen pnpm lockfile in CI.
