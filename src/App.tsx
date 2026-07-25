@@ -29,6 +29,7 @@ import {
   X,
 } from "lucide-react";
 import { TopicNode } from "./components/TopicNode";
+import { decorateEdgesForHighlight } from "./components/graph-presentation";
 import { statusMeta } from "./components/status-meta";
 import { getGraphNeighborhood } from "./domain/graph";
 import { useGraphStore } from "./stores/graph-store";
@@ -106,13 +107,7 @@ function Workspace() {
           !node.selected && neighborhood.nodeIds.has(node.id) && "is-adjacent-node",
         ),
       })),
-      renderedEdges: edges.map((edge) => ({
-        ...edge,
-        className: mergeClassNames(
-          edge.className,
-          neighborhood.edgeIds.has(edge.id) && "is-adjacent-edge",
-        ),
-      })),
+      renderedEdges: decorateEdgesForHighlight(edges, neighborhood.edgeIds),
     };
   }, [edges, nodes]);
 
