@@ -14,26 +14,24 @@ import {
   wouldCreateCycle,
 } from "../domain/graph";
 
-const statusClass = (status: LearningNodeData["status"]) => `topic-node topic-${status}`;
+const STORAGE_KEY = "prereqgraph-document-v1";
+const HISTORY_LIMIT = 100;
 
 const initialNodes: LearningNode[] = [
   {
     id: "fundamentals",
     position: { x: 80, y: 160 },
     data: { label: "Fundamentals", status: "mastered" },
-    className: statusClass("mastered"),
   },
   {
     id: "intermediate",
     position: { x: 380, y: 80 },
     data: { label: "Intermediate topic", status: "learning" },
-    className: statusClass("learning"),
   },
   {
     id: "goal",
     position: { x: 680, y: 160 },
     data: { label: "Learning goal", status: "unknown" },
-    className: statusClass("unknown"),
   },
 ];
 
@@ -43,104 +41,338 @@ const initialEdges: PrerequisiteEdge[] = [
 ];
 
 type TopicPatch = Partial<Pick<LearningNodeData, "label" | "status">>;
+type SelectionMode = "replace" | "add" | "toggle";
+
+type GraphSnapshot = {
+  nodes: LearningNode[];
+  edges: PrerequisiteEdge[];
+};
+
+type PersistedDocument = GraphSnapshot & {
+  version: 1;
+};
 
 type GraphStore = {
   nodes: LearningNode[];
   edges: PrerequisiteEdge[];
-  selectedNodeId: string | null;
   cycleMessage: string | null;
+  past: GraphSnapshot[];
+  future: GraphSnapshot[];
+  historyTransaction: GraphSnapshot | null;
   onNodesChange: (changes: NodeChange<LearningNode>[]) => void;
   onEdgesChange: (changes: EdgeChange<PrerequisiteEdge>[]) => void;
   connect: (connection: Connection) => void;
   addNode: () => string;
   updateNode: (id: string, patch: TopicPatch) => void;
   deleteNode: (id: string) => void;
-  selectNode: (id: string | null) => void;
+  deleteSelected: () => void;
+  setSelectedNodes: (ids: string[], mode?: SelectionMode) => void;
+  clearSelection: () => void;
+  beginHistoryTransaction: () => void;
+  endHistoryTransaction: () => void;
+  undo: () => void;
+  redo: () => void;
   clearCycleMessage: () => void;
 };
 
+function durableNode(node: LearningNode): LearningNode {
+  return {
+    ...structuredClone(node),
+    selected: false,
+    dragging: false,
+  };
+}
+
+function durableEdge(edge: PrerequisiteEdge): PrerequisiteEdge {
+  return {
+    ...structuredClone(edge),
+    selected: false,
+  };
+}
+
+function createSnapshot(nodes: LearningNode[], edges: PrerequisiteEdge[]): GraphSnapshot {
+  return {
+    nodes: nodes.map(durableNode),
+    edges: edges.map(durableEdge),
+  };
+}
+
+function snapshotsEqual(left: GraphSnapshot, right: GraphSnapshot): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function historyState(state: GraphStore) {
+  return {
+    past: [...state.past, createSnapshot(state.nodes, state.edges)].slice(-HISTORY_LIMIT),
+    future: [],
+  };
+}
+
+function loadDocument(): GraphSnapshot {
+  if (typeof window === "undefined") {
+    return createSnapshot(initialNodes, initialEdges);
+  }
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return createSnapshot(initialNodes, initialEdges);
+
+    const parsed = JSON.parse(raw) as Partial<PersistedDocument>;
+    if (parsed.version !== 1 || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
+      return createSnapshot(initialNodes, initialEdges);
+    }
+
+    return createSnapshot(parsed.nodes as LearningNode[], parsed.edges as PrerequisiteEdge[]);
+  } catch {
+    return createSnapshot(initialNodes, initialEdges);
+  }
+}
+
+const loadedDocument = loadDocument();
+
 export const useGraphStore = create<GraphStore>((set, get) => ({
-  nodes: initialNodes,
-  edges: initialEdges,
-  selectedNodeId: null,
+  nodes: loadedDocument.nodes,
+  edges: loadedDocument.edges,
   cycleMessage: null,
+  past: [],
+  future: [],
+  historyTransaction: null,
+
   onNodesChange: (changes) =>
     set((state) => {
       const removedIds = new Set(
         changes.filter((change) => change.type === "remove").map((change) => change.id),
       );
+      const hasDurableChange = changes.some(
+        (change) => change.type === "position" || change.type === "remove",
+      );
+      const nextNodes = applyNodeChanges(changes, state.nodes);
+      const nextEdges =
+        removedIds.size === 0
+          ? state.edges
+          : state.edges.filter(
+              (edge) => !removedIds.has(edge.source) && !removedIds.has(edge.target),
+            );
 
       return {
-        nodes: applyNodeChanges(changes, state.nodes),
-        edges:
-          removedIds.size === 0
-            ? state.edges
-            : state.edges.filter(
-                (edge) => !removedIds.has(edge.source) && !removedIds.has(edge.target),
-              ),
-        selectedNodeId:
-          state.selectedNodeId && removedIds.has(state.selectedNodeId)
-            ? null
-            : state.selectedNodeId,
+        ...(hasDurableChange && !state.historyTransaction ? historyState(state) : {}),
+        nodes: nextNodes,
+        edges: nextEdges,
       };
     }),
+
   onEdgesChange: (changes) =>
-    set((state) => ({ edges: applyEdgeChanges(changes, state.edges) })),
+    set((state) => {
+      const hasDurableChange = changes.some((change) => change.type === "remove");
+      return {
+        ...(hasDurableChange ? historyState(state) : {}),
+        edges: applyEdgeChanges(changes, state.edges),
+      };
+    }),
+
   connect: (connection) => {
     if (!connection.source || !connection.target) return;
 
     if (wouldCreateCycle(get().edges, connection.source, connection.target)) {
-      set({ cycleMessage: "Connection rejected: prerequisite graphs cannot contain cycles." });
+      set({ cycleMessage: "Prerequisite graphs cannot contain cycles." });
       return;
     }
 
     set((state) => ({
-      edges: addEdge({ ...connection, id: crypto.randomUUID() }, state.edges),
+      ...historyState(state),
+      edges: addEdge(
+        {
+          ...connection,
+          id: crypto.randomUUID(),
+          selected: false,
+        },
+        state.edges,
+      ),
       cycleMessage: null,
     }));
   },
+
   addNode: () => {
     const id = crypto.randomUUID();
 
     set((state) => ({
+      ...historyState(state),
       nodes: [
-        ...state.nodes,
+        ...state.nodes.map((node) => ({ ...node, selected: false })),
         {
           id,
-          position: { x: 220 + state.nodes.length * 28, y: 220 + (state.nodes.length % 4) * 42 },
+          position: {
+            x: 220 + state.nodes.length * 28,
+            y: 220 + (state.nodes.length % 4) * 42,
+          },
           data: { label: "New topic", status: "unknown" },
-          className: statusClass("unknown"),
+          selected: true,
         },
       ],
-      selectedNodeId: id,
+      edges: state.edges.map((edge) => ({ ...edge, selected: false })),
     }));
 
     return id;
   },
+
   updateNode: (id, patch) =>
-    set((state) => ({
-      nodes: state.nodes.map((node) => {
-        if (node.id !== id) return node;
+    set((state) => {
+      const current = state.nodes.find((node) => node.id === id);
+      if (!current) return state;
 
-        const data = {
-          ...node.data,
-          ...patch,
-          label: patch.label === undefined ? node.data.label : patch.label.trim() || node.data.label,
-        };
+      const nextLabel =
+        patch.label === undefined
+          ? current.data.label
+          : patch.label.trim().length > 0
+            ? patch.label
+            : current.data.label;
+      const nextStatus = patch.status ?? current.data.status;
 
-        return {
-          ...node,
-          data,
-          className: statusClass(data.status),
-        };
-      }),
-    })),
+      if (nextLabel === current.data.label && nextStatus === current.data.status) {
+        return state;
+      }
+
+      return {
+        ...(!state.historyTransaction ? historyState(state) : {}),
+        nodes: state.nodes.map((node) =>
+          node.id === id
+            ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  label: nextLabel,
+                  status: nextStatus,
+                },
+              }
+            : node,
+        ),
+      };
+    }),
+
   deleteNode: (id) =>
+    set((state) => {
+      if (!state.nodes.some((node) => node.id === id)) return state;
+
+      return {
+        ...historyState(state),
+        nodes: state.nodes.filter((node) => node.id !== id),
+        edges: state.edges.filter((edge) => edge.source !== id && edge.target !== id),
+      };
+    }),
+
+  deleteSelected: () =>
+    set((state) => {
+      const selectedNodeIds = new Set(
+        state.nodes.filter((node) => node.selected).map((node) => node.id),
+      );
+      const selectedEdgeIds = new Set(
+        state.edges.filter((edge) => edge.selected).map((edge) => edge.id),
+      );
+
+      if (selectedNodeIds.size === 0 && selectedEdgeIds.size === 0) return state;
+
+      return {
+        ...historyState(state),
+        nodes: state.nodes.filter((node) => !selectedNodeIds.has(node.id)),
+        edges: state.edges.filter(
+          (edge) =>
+            !selectedEdgeIds.has(edge.id) &&
+            !selectedNodeIds.has(edge.source) &&
+            !selectedNodeIds.has(edge.target),
+        ),
+      };
+    }),
+
+  setSelectedNodes: (ids, mode = "replace") =>
+    set((state) => {
+      const targetIds = new Set(ids);
+
+      return {
+        nodes: state.nodes.map((node) => {
+          if (mode === "replace") {
+            return { ...node, selected: targetIds.has(node.id) };
+          }
+
+          if (!targetIds.has(node.id)) return node;
+          if (mode === "add") return { ...node, selected: true };
+          return { ...node, selected: !node.selected };
+        }),
+        edges:
+          mode === "replace"
+            ? state.edges.map((edge) => ({ ...edge, selected: false }))
+            : state.edges,
+      };
+    }),
+
+  clearSelection: () =>
     set((state) => ({
-      nodes: state.nodes.filter((node) => node.id !== id),
-      edges: state.edges.filter((edge) => edge.source !== id && edge.target !== id),
-      selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
+      nodes: state.nodes.map((node) => ({ ...node, selected: false })),
+      edges: state.edges.map((edge) => ({ ...edge, selected: false })),
     })),
-  selectNode: (id) => set({ selectedNodeId: id }),
+
+  beginHistoryTransaction: () =>
+    set((state) =>
+      state.historyTransaction
+        ? state
+        : { historyTransaction: createSnapshot(state.nodes, state.edges) },
+    ),
+
+  endHistoryTransaction: () =>
+    set((state) => {
+      if (!state.historyTransaction) return state;
+
+      const current = createSnapshot(state.nodes, state.edges);
+      if (snapshotsEqual(state.historyTransaction, current)) {
+        return { historyTransaction: null };
+      }
+
+      return {
+        past: [...state.past, state.historyTransaction].slice(-HISTORY_LIMIT),
+        future: [],
+        historyTransaction: null,
+      };
+    }),
+
+  undo: () =>
+    set((state) => {
+      const previous = state.past.at(-1);
+      if (!previous) return state;
+
+      return {
+        nodes: structuredClone(previous.nodes),
+        edges: structuredClone(previous.edges),
+        past: state.past.slice(0, -1),
+        future: [...state.future, createSnapshot(state.nodes, state.edges)].slice(-HISTORY_LIMIT),
+        historyTransaction: null,
+        cycleMessage: null,
+      };
+    }),
+
+  redo: () =>
+    set((state) => {
+      const next = state.future.at(-1);
+      if (!next) return state;
+
+      return {
+        nodes: structuredClone(next.nodes),
+        edges: structuredClone(next.edges),
+        past: [...state.past, createSnapshot(state.nodes, state.edges)].slice(-HISTORY_LIMIT),
+        future: state.future.slice(0, -1),
+        historyTransaction: null,
+        cycleMessage: null,
+      };
+    }),
+
   clearCycleMessage: () => set({ cycleMessage: null }),
 }));
+
+if (typeof window !== "undefined") {
+  useGraphStore.subscribe((state) => {
+    const document: PersistedDocument = {
+      version: 1,
+      ...createSnapshot(state.nodes, state.edges),
+    };
+
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
+  });
+}
