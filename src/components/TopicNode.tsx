@@ -1,7 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { ArrowRight, ChevronDown, Plus, X } from "lucide-react";
-import { connectionIssueMeta, getConnectionIssue } from "../domain/connection";
+import { ArrowRight, ChevronDown, Plus } from "lucide-react";
 import type { LearningNode, MasteryStatus } from "../domain/graph";
 import { useGraphStore } from "../stores/graph-store";
 import { updateTopicTitle } from "../stores/topic-actions";
@@ -18,12 +17,6 @@ export const TopicNode = memo(function TopicNode({
   const setSelectedNodes = useGraphStore((state) => state.setSelectedNodes);
   const beginHistoryTransaction = useGraphStore((state) => state.beginHistoryTransaction);
   const endHistoryTransaction = useGraphStore((state) => state.endHistoryTransaction);
-  const edges = useGraphStore((state) => state.edges);
-  const connectionSourceId = useGraphStore((state) => state.connectionSourceId);
-  const connectionMode = useGraphStore((state) => state.connectionMode);
-  const beginConnection = useGraphStore((state) => state.beginConnection);
-  const connectToNode = useGraphStore((state) => state.connectToNode);
-  const cancelConnection = useGraphStore((state) => state.cancelConnection);
   const [editingTitle, setEditingTitle] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
   const [draft, setDraft] = useState(data.label);
@@ -32,22 +25,6 @@ export const TopicNode = memo(function TopicNode({
   const titleInputRef = useRef<HTMLTextAreaElement>(null);
   const status = statusMeta[data.status];
   const StatusIcon = status.icon;
-  const isConnectionSource = connectionSourceId === id;
-  const connectionIssue =
-    connectionSourceId && !isConnectionSource
-      ? getConnectionIssue(edges, connectionSourceId, id)
-      : null;
-  const isClickConnectionCandidate =
-    connectionMode === "click" &&
-    connectionSourceId !== null &&
-    !isConnectionSource &&
-    connectionIssue === null;
-  const isUnavailableConnectionTarget =
-    connectionMode === "click" && connectionSourceId !== null && connectionIssue !== null;
-  const connectionIssueMessage = connectionIssue
-    ? connectionIssueMeta[connectionIssue].message
-    : undefined;
-  const handlesEnabled = isConnectable && connectionMode !== "click";
 
   useEffect(() => {
     if (!editingTitle) setDraft(data.label);
@@ -120,30 +97,18 @@ export const TopicNode = memo(function TopicNode({
     setStatusOpen(false);
   };
 
-  const toggleClickConnection = () => {
-    if (isConnectionSource) {
-      cancelConnection();
-      return;
-    }
-
-    beginConnection(id, "click");
-    setStatusOpen(false);
-  };
-
   return (
     <article
       className={`topic-node-card topic-node-${data.status}${selected ? " is-selected" : ""}`}
       style={{ width: getTopicNodeWidth(data.label) }}
       aria-label={`${data.label}, ${status.label}`}
-      aria-disabled={isUnavailableConnectionTarget || undefined}
-      title={connectionIssueMessage}
     >
       <Handle
         id="prerequisite-in"
         type="target"
         position={Position.Left}
         className="topic-handle topic-handle-target"
-        isConnectable={handlesEnabled}
+        isConnectable={isConnectable}
         aria-label="Incoming prerequisite connection"
         title="Drop a prerequisite connection here"
       >
@@ -180,108 +145,62 @@ export const TopicNode = memo(function TopicNode({
           </button>
         )}
 
-        <div className="topic-node-footer">
-          <div
-            className="topic-status-control nodrag nopan"
-            onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as HTMLElement | null)) {
-                setStatusOpen(false);
-              }
-            }}
-          >
-            <button
-              type="button"
-              className={`topic-node-status status-${data.status}`}
-              aria-haspopup="listbox"
-              aria-expanded={statusOpen}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => {
-                selectOnlyThisNode();
-                setStatusOpen((open) => !open);
-              }}
-            >
-              <StatusIcon size={13} strokeWidth={2.3} aria-hidden="true" />
-              <span>{status.label}</span>
-              <ChevronDown className="status-chevron" size={13} aria-hidden="true" />
-            </button>
-
-            {statusOpen ? (
-              <div className="topic-status-menu" role="listbox" aria-label="Topic status">
-                {masteryStatuses.map((value) => {
-                  const item = statusMeta[value];
-                  const ItemIcon = item.icon;
-
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      role="option"
-                      aria-selected={data.status === value}
-                      className={`topic-status-option status-${value}`}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={() => chooseStatus(value)}
-                    >
-                      <ItemIcon size={14} aria-hidden="true" />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-
+        <div
+          className="topic-status-control nodrag nopan"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as HTMLElement | null)) {
+              setStatusOpen(false);
+            }
+          }}
+        >
           <button
             type="button"
-            className={`topic-connect-action nodrag nopan${isConnectionSource ? " is-active" : ""}`}
-            aria-pressed={isConnectionSource}
-            aria-label={
-              isConnectionSource
-                ? `Cancel connection from ${data.label}`
-                : `Connect ${data.label} to the topic it unlocks`
-            }
-            title={
-              isConnectionSource
-                ? "Cancel connection"
-                : "Click to choose the next topic, or drag the right port"
-            }
-            disabled={connectionSourceId !== null && !isConnectionSource}
+            className={`topic-node-status status-${data.status}`}
+            aria-haspopup="listbox"
+            aria-expanded={statusOpen}
             onPointerDown={(event) => event.stopPropagation()}
-            onClick={toggleClickConnection}
+            onClick={() => {
+              selectOnlyThisNode();
+              setStatusOpen((open) => !open);
+            }}
           >
-            {isConnectionSource ? (
-              <X size={13} aria-hidden="true" />
-            ) : (
-              <ArrowRight size={13} aria-hidden="true" />
-            )}
-            <span>{isConnectionSource ? "Cancel" : "Connect"}</span>
+            <StatusIcon size={13} strokeWidth={2.3} aria-hidden="true" />
+            <span>{status.label}</span>
+            <ChevronDown className="status-chevron" size={13} aria-hidden="true" />
           </button>
+
+          {statusOpen ? (
+            <div className="topic-status-menu" role="listbox" aria-label="Topic status">
+              {masteryStatuses.map((value) => {
+                const item = statusMeta[value];
+                const ItemIcon = item.icon;
+
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="option"
+                    aria-selected={data.status === value}
+                    className={`topic-status-option status-${value}`}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={() => chooseStatus(value)}
+                  >
+                    <ItemIcon size={14} aria-hidden="true" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       </div>
-
-      {isClickConnectionCandidate ? (
-        <button
-          type="button"
-          className="topic-connect-target nodrag nopan"
-          aria-label={`Connect prerequisite to ${data.label}`}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={() => connectToNode(id)}
-        >
-          <span className="topic-connect-target-icon">
-            <ArrowRight size={16} aria-hidden="true" />
-          </span>
-          <span>
-            <strong>Connect here</strong>
-            <small>This becomes the unlocked topic</small>
-          </span>
-        </button>
-      ) : null}
 
       <Handle
         id="unlocks-out"
         type="source"
         position={Position.Right}
         className="topic-handle topic-handle-source"
-        isConnectable={handlesEnabled}
+        isConnectable={isConnectable}
         aria-label="Outgoing unlock connection"
         title="Drag to the topic this prerequisite unlocks"
       >
