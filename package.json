@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "audit": "pnpm audit",
     "audit:prod": "pnpm audit --prod",
-    "tauri": "tauri"
+    "icons": "tauri icon src-tauri/app-icon.svg",
+    "tauri": "node scripts/tauri.mjs"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.2",
