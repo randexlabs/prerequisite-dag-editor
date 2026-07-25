@@ -62,7 +62,8 @@ Do not run `npm audit fix --force`; review and upgrade the affected direct depen
 ## Topic operations
 
 - **Create:** use **Add topic** or press `N`.
-- **Select:** click a topic. Drag an empty area of the canvas to select multiple topics.
+- **Select:** click a topic. Drag with the left mouse button on empty canvas space to select multiple topics.
+- **Move the canvas:** drag with the middle mouse button. `Space` plus left drag remains available as an alternative.
 - **Add to selection:** hold `Ctrl`/`Cmd` while clicking topics.
 - **Rename:** click the title inside a topic and type. `Enter` commits and `Escape` cancels.
 - **Change mastery:** click the status pill inside a topic and choose another status.
@@ -71,7 +72,7 @@ Do not run `npm audit fix --force`; review and upgrade the affected direct depen
 - **Redo:** press `Ctrl`/`Cmd+Shift+Z`, `Ctrl+Y`, or use the forward button.
 - **Clear selection:** press `Escape`.
 
-Changes are autosaved locally. There is no explicit save button. Selection is treated as temporary UI state and is not written into the document history.
+Changes are autosaved locally. There is no explicit save button. Selection is temporary UI state and does not trigger document persistence or add entries to the undo history.
 
 Deleting a topic also deletes every incoming and outgoing connection attached to it. A single undo step restores the complete deletion.
 
