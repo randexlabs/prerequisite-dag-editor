@@ -1278,6 +1278,7 @@ Exit code: `2`
 ```text
 
 ```
+
 $ prettier . --write
 .ci/cleanup-report.md 65ms
 [90m.github/workflows/ci.yml[39m 20ms (unchanged)
@@ -1322,7 +1323,7 @@ $ prettier . --write
 [90mtsconfig.node.json[39m 1ms (unchanged)
 [90mvite.config.ts[39m 2ms (unchanged)
 
-```
+````
 
 Exit code: `0`
 
@@ -1331,7 +1332,7 @@ Exit code: `0`
 ```text
 $ cargo fmt --manifest-path src-tauri/Cargo.toml --all
 
-```
+````
 
 Exit code: `0`
 
@@ -1405,7 +1406,8 @@ $ pnpm design:check && tsc -b && vite build
 $ node scripts/check-design-tokens.mjs
 Design token check passed.
 [36mvite v8.1.5 [32mbuilding client environment for production...[36m[39m
-[2Ktransforming...✓ 1735 modules transformed.
+[2K
+transforming...✓ 1735 modules transformed.
 rendering chunks...
 computing gzip size...
 dist/index.html                   0.44 kB │ gzip:   0.28 kB
@@ -2244,4 +2246,3 @@ Exit code: `0`
 ```
 
 Exit code: `0`
-
