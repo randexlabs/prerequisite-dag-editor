@@ -69,7 +69,7 @@ pnpm audit
 pnpm audit:prod
 ```
 
-`pnpm check` uses the incremental Prettier check so legacy files can be migrated gradually. `pnpm format:check` checks every supported file when a full formatting audit is needed.
+`pnpm check` validates formatting across the complete repository, runs ESLint and Vitest, enforces the design-token policy, builds the web application, checks Rustfmt, runs Clippy with warnings denied, and executes the Rust tests.
 
 Do not run `npm audit fix --force`; review and upgrade the affected direct dependency instead.
 
@@ -77,7 +77,7 @@ Do not run `npm audit fix --force`; review and upgrade the affected direct depen
 
 `.github/workflows/ci.yml` runs on every push to `main` and can also be started manually. It has separate web and Rust jobs.
 
-The web job validates changed-file formatting, ESLint, Vitest, the design-token policy, TypeScript, and the Vite production build. The Rust job generates the Tauri icons, checks Rustfmt, runs Clippy with warnings denied, and runs `cargo test`.
+The web job validates repository-wide formatting, ESLint, Vitest, the design-token policy, TypeScript, and the Vite production build. The Rust job generates the Tauri icons, checks Rustfmt, runs Clippy with warnings denied, and runs `cargo test`.
 
 ## Topic operations
 
