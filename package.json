@@ -12,7 +12,6 @@
     "dev": "vite",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "format:check:changed": "node scripts/check-changed-format.mjs",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "design:check": "node scripts/check-design-tokens.mjs",
