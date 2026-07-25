@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -7,12 +7,10 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
+  SelectionMode,
   useReactFlow,
 } from "@xyflow/react";
 import {
-  BookOpen,
-  CheckCircle2,
-  Circle,
   ListTree,
   Map,
   Maximize2,
@@ -22,35 +20,19 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
-  Save,
+  Redo2,
   Search,
   Sun,
   Trash2,
+  Undo2,
   X,
 } from "lucide-react";
 import { TopicNode } from "./components/TopicNode";
-import type { LearningNode, MasteryStatus } from "./domain/graph";
+import { statusMeta } from "./components/status-meta";
 import { useGraphStore } from "./stores/graph-store";
 
 const nodeTypes = { topic: TopicNode };
-
 type Theme = "light" | "dark";
-
-type TopicInspectorProps = {
-  node: LearningNode;
-  onSave: (label: string, status: MasteryStatus) => void;
-  onDelete: () => void;
-  onClose: () => void;
-};
-
-const statusMeta: Record<
-  MasteryStatus,
-  { label: string; icon: typeof Circle }
-> = {
-  unknown: { label: "Not started", icon: Circle },
-  learning: { label: "Learning", icon: BookOpen },
-  mastered: { label: "Mastered", icon: CheckCircle2 },
-};
 
 function getInitialTheme(): Theme {
   const stored = window.localStorage.getItem("prereqgraph-theme");
@@ -58,88 +40,24 @@ function getInitialTheme(): Theme {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-function TopicInspector({ node, onSave, onDelete, onClose }: TopicInspectorProps) {
-  const [label, setLabel] = useState(node.data.label);
-  const [status, setStatus] = useState<MasteryStatus>(node.data.status);
-
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!label.trim()) return;
-    onSave(label, status);
-  };
-
-  return (
-    <form className="floating-panel inspector-panel" onSubmit={submit}>
-      <header className="panel-header">
-        <div>
-          <p className="eyebrow">Selected topic</p>
-          <h2>Edit topic</h2>
-        </div>
-        <button type="button" className="icon-button" onClick={onClose} aria-label="Close inspector">
-          <X size={17} />
-        </button>
-      </header>
-
-      <label className="field">
-        <span>Name</span>
-        <input
-          autoFocus
-          maxLength={80}
-          value={label}
-          onChange={(event) => setLabel(event.target.value)}
-          placeholder="Topic name"
-        />
-      </label>
-
-      <fieldset className="status-fieldset">
-        <legend>Status</legend>
-        <div className="status-options">
-          {(Object.keys(statusMeta) as MasteryStatus[]).map((value) => {
-            const item = statusMeta[value];
-            const StatusIcon = item.icon;
-
-            return (
-              <label key={value} className={`status-option status-${value}`}>
-                <input
-                  type="radio"
-                  name="status"
-                  value={value}
-                  checked={status === value}
-                  onChange={() => setStatus(value)}
-                />
-                <StatusIcon size={16} aria-hidden="true" />
-                <span>{item.label}</span>
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
-
-      <div className="inspector-actions">
-        <button type="submit" className="primary-button grow">
-          <Save size={16} /> Save changes
-        </button>
-        <button type="button" className="danger-button" onClick={onDelete}>
-          <Trash2 size={16} /> Delete
-        </button>
-      </div>
-    </form>
-  );
-}
-
 function Workspace() {
   const {
     nodes,
     edges,
-    selectedNodeId,
     cycleMessage,
+    past,
+    future,
     onNodesChange,
     onEdgesChange,
     connect,
     addNode,
-    updateNode,
-    deleteNode,
-    selectNode,
+    deleteSelected,
+    setSelectedNodes,
+    clearSelection,
+    beginHistoryTransaction,
+    endHistoryTransaction,
+    undo,
+    redo,
     clearCycleMessage,
   } = useGraphStore();
   const { fitView } = useReactFlow();
@@ -148,21 +66,18 @@ function Workspace() {
   const [minimapOpen, setMinimapOpen] = useState(false);
   const [query, setQuery] = useState("");
 
-  const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
   const displayedNodes = useMemo(
-    () =>
-      nodes.map((node) => ({
-        ...node,
-        type: "topic",
-        selected: node.id === selectedNodeId,
-      })),
-    [nodes, selectedNodeId],
+    () => nodes.map((node) => ({ ...node, type: "topic" })),
+    [nodes],
   );
   const filteredNodes = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
     if (!normalizedQuery) return nodes;
     return nodes.filter((node) => node.data.label.toLocaleLowerCase().includes(normalizedQuery));
   }, [nodes, query]);
+  const selectedNodeCount = nodes.filter((node) => node.selected).length;
+  const selectedEdgeCount = edges.filter((edge) => edge.selected).length;
+  const selectedElementCount = selectedNodeCount + selectedEdgeCount;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -173,26 +88,44 @@ function Workspace() {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const isEditing = target?.matches("input, textarea, select, [contenteditable='true']");
+      const key = event.key.toLocaleLowerCase();
+      const modifier = event.metaKey || event.ctrlKey;
+
+      if (!isEditing && modifier && key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+        return;
+      }
+
+      if (!isEditing && modifier && key === "y") {
+        event.preventDefault();
+        redo();
+        return;
+      }
+
+      if (isEditing) return;
 
       if (event.key === "Escape") {
-        selectNode(null);
+        clearSelection();
         return;
       }
 
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedNodeId && !isEditing) {
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedElementCount > 0) {
         event.preventDefault();
-        deleteNode(selectedNodeId);
+        deleteSelected();
         return;
       }
 
-      if (isEditing || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (modifier || event.altKey) return;
 
-      if (event.key.toLocaleLowerCase() === "n") {
+      if (key === "n") {
         event.preventDefault();
         addNode();
+        setBrowserOpen(true);
       }
 
-      if (event.key.toLocaleLowerCase() === "f") {
+      if (key === "f") {
         event.preventDefault();
         void fitView({ padding: 0.24, duration: 240 });
       }
@@ -200,17 +133,15 @@ function Workspace() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [addNode, deleteNode, fitView, selectNode, selectedNodeId]);
-
-  const removeSelectedNode = () => {
-    if (!selectedNode) return;
-
-    const confirmed = window.confirm(
-      `Delete “${selectedNode.data.label}”? Its prerequisite connections will also be removed.`,
-    );
-
-    if (confirmed) deleteNode(selectedNode.id);
-  };
+  }, [
+    addNode,
+    clearSelection,
+    deleteSelected,
+    fitView,
+    redo,
+    selectedElementCount,
+    undo,
+  ]);
 
   const addTopic = () => {
     addNode();
@@ -228,11 +159,15 @@ function Workspace() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={connect}
-          onNodeClick={(_, node) => selectNode(node.id)}
-          onPaneClick={() => selectNode(null)}
+          onPaneClick={clearSelection}
+          onNodeDragStart={beginHistoryTransaction}
+          onNodeDragStop={endHistoryTransaction}
           deleteKeyCode={null}
           selectionOnDrag
+          selectionMode={SelectionMode.Partial}
+          panOnDrag={false}
           panOnScroll
+          multiSelectionKeyCode={["Meta", "Control"]}
           minZoom={0.2}
           maxZoom={2.2}
           fitView
@@ -245,7 +180,12 @@ function Workspace() {
             interactionWidth: 20,
           }}
         >
-          <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="var(--color-canvas-grid)" />
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={24}
+            size={1.2}
+            color="var(--color-canvas-grid)"
+          />
           <Controls className="canvas-controls" showInteractive={false} />
           {minimapOpen ? (
             <MiniMap
@@ -283,16 +223,36 @@ function Workspace() {
         <div className="brand-mark"><Network size={18} /></div>
         <div className="brand-copy">
           <strong>PrereqGraph</strong>
-          <span>{nodes.length} topics</span>
+          <span>Autosaved · {nodes.length} topics</span>
         </div>
       </div>
 
       <nav className="tool-dock floating-surface" aria-label="Canvas tools">
+        <button
+          type="button"
+          className="tool-button"
+          onClick={undo}
+          disabled={past.length === 0}
+          aria-label="Undo"
+          title="Undo (Ctrl/Cmd+Z)"
+        >
+          <Undo2 size={18} />
+        </button>
+        <button
+          type="button"
+          className="tool-button"
+          onClick={redo}
+          disabled={future.length === 0}
+          aria-label="Redo"
+          title="Redo (Ctrl/Cmd+Shift+Z)"
+        >
+          <Redo2 size={18} />
+        </button>
+        <span className="dock-divider" />
         <button type="button" className="tool-button is-active" aria-label="Select tool" title="Select">
           <MousePointer2 size={18} />
           <kbd>1</kbd>
         </button>
-        <span className="dock-divider" />
         <button type="button" className="tool-button" onClick={addTopic} aria-label="Add topic" title="Add topic (N)">
           <Plus size={19} />
           <kbd>N</kbd>
@@ -317,6 +277,20 @@ function Workspace() {
         >
           <Map size={18} />
         </button>
+        <span className="dock-divider" />
+        <button
+          type="button"
+          className="tool-button tool-button-danger"
+          onClick={deleteSelected}
+          disabled={selectedElementCount === 0}
+          aria-label="Delete selection"
+          title="Delete selection"
+        >
+          <Trash2 size={18} />
+        </button>
+        {selectedElementCount > 0 ? (
+          <span className="selection-summary">{selectedElementCount} selected</span>
+        ) : null}
         <span className="dock-divider" />
         <button
           type="button"
@@ -365,8 +339,13 @@ function Workspace() {
                 <button
                   key={node.id}
                   type="button"
-                  className={`topic-list-item${node.id === selectedNodeId ? " is-selected" : ""}`}
-                  onClick={() => selectNode(node.id)}
+                  className={`topic-list-item${node.selected ? " is-selected" : ""}`}
+                  onClick={(event) =>
+                    setSelectedNodes(
+                      [node.id],
+                      event.metaKey || event.ctrlKey || event.shiftKey ? "toggle" : "replace",
+                    )
+                  }
                   role="listitem"
                 >
                   <span className={`status-icon status-${node.data.status}`}>
@@ -390,20 +369,10 @@ function Workspace() {
         </aside>
       ) : null}
 
-      {selectedNode ? (
-        <TopicInspector
-          key={selectedNode.id}
-          node={selectedNode}
-          onSave={(label, status) => updateNode(selectedNode.id, { label, status })}
-          onDelete={removeSelectedNode}
-          onClose={() => selectNode(null)}
-        />
-      ) : null}
-
       <div className="canvas-hint floating-surface">
+        <span>Drag empty space to select</span>
         <span><kbd>Space</kbd> + drag to pan</span>
-        <span><kbd>N</kbd> new topic</span>
-        <span><kbd>F</kbd> fit view</span>
+        <span><kbd>Ctrl/Cmd</kbd> + click to add</span>
       </div>
 
       {cycleMessage ? (
