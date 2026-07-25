@@ -36,9 +36,11 @@ jobs:
           cache: pnpm
 
       - name: Remove redundant UI and mechanics
+        id: transform
         shell: bash
         run: |
-          python - <<'PY'
+          set +e
+          python - <<'PY' > ui-cleanup-report.txt 2>&1
           from pathlib import Path
           import re
 
@@ -48,17 +50,17 @@ jobs:
                   raise RuntimeError(f"{label}: expected one match, found {count}")
               return source.replace(old, new, 1)
 
+          def sub_once(source: str, pattern: str, replacement: str, label: str) -> str:
+              result, count = re.subn(pattern, replacement, source, count=1, flags=re.DOTALL)
+              if count != 1:
+                  raise RuntimeError(f"{label}: expected one match, found {count}")
+              return result
+
           app_path = Path("src/App.tsx")
           app = app_path.read_text(encoding="utf-8")
 
-          for line in (
-              "  Controls,\n",
-              "  useReactFlow,\n",
-              "  Maximize2,\n",
-              "  PanelLeftClose,\n",
-              "  PanelLeftOpen,\n",
-          ):
-              app = replace_once(app, line, "", f"remove import {line.strip()}")
+          for symbol in ("Controls", "useReactFlow", "Maximize2", "PanelLeftClose", "PanelLeftOpen"):
+              app = sub_once(app, rf"^\s*{symbol},\n", "", f"remove {symbol} import")
 
           app = replace_once(
               app,
@@ -72,23 +74,21 @@ jobs:
               "const fitViewOptions = { padding: 0.24 } as const;\n",
               "const fitViewOptions = { padding: 0.24 } as const;\n"
               "const proOptions = { hideAttribution: true } as const;\n",
-              "React Flow pro options",
+              "React Flow attribution option",
           )
-          app = replace_once(app, "  const { fitView } = useReactFlow();\n", "", "fitView hook")
-          app = replace_once(
+          app = sub_once(app, r"^\s*const \{ fitView \} = useReactFlow\(\);\n", "", "fitView hook")
+          app = sub_once(
               app,
-              "  const [browserOpen, setBrowserOpen] = useState(true);\n",
+              r"^\s*const \[browserOpen, setBrowserOpen\] = useState\(true\);\n",
               "",
               "browser visibility state",
           )
 
-          shortcut_effect = re.compile(
-              r"  useEffect\(\(\) => \{\n"
-              r"    const handleKeyDown = \(event: KeyboardEvent\) => \{.*?"
+          app = sub_once(
+              app,
+              r"  useEffect\(\(\) => \{\n\s*const handleKeyDown = \(event: KeyboardEvent\) => \{.*?"
               r"  \}, \[addNode, clearSelection, deleteSelected, fitView, redo, selectedElementCount, undo\]\);\n",
-              re.DOTALL,
-          )
-          replacement_effect = '''  useEffect(() => {
+              '''  useEffect(() => {
             const handleKeyDown = (event: KeyboardEvent) => {
               const target = event.target as HTMLElement | null;
               const action = getWorkspaceShortcut(event, {
@@ -127,22 +127,13 @@ jobs:
             window.addEventListener("keydown", handleKeyDown);
             return () => window.removeEventListener("keydown", handleKeyDown);
           }, [addNode, clearSelection, deleteSelected, redo, selectedElementCount, undo]);
-'''
-          app, count = shortcut_effect.subn(replacement_effect, app, count=1)
-          if count != 1:
-              raise RuntimeError(f"keyboard effect: expected one match, found {count}")
-
-          app = replace_once(
+''',
+              "workspace keyboard effect",
+          )
+          app = sub_once(
               app,
-              '''  const addTopic = () => {
-            addNode();
-            setBrowserOpen(true);
-          };
-''',
-              '''  const addTopic = () => {
-            addNode();
-          };
-''',
+              r"  const addTopic = \(\) => \{\n\s*addNode\(\);\n\s*setBrowserOpen\(true\);\n\s*\};\n",
+              "  const addTopic = () => {\n    addNode();\n  };\n",
               "add topic action",
           )
           app = replace_once(
@@ -155,75 +146,49 @@ jobs:
               app,
               "          fitViewOptions={fitViewOptions}\n",
               "          fitViewOptions={fitViewOptions}\n          proOptions={proOptions}\n",
-              "attribution option",
+              "attribution prop",
           )
-          app = replace_once(
+          app = sub_once(
               app,
-              '          <Controls className="canvas-controls" showInteractive={false} />\n',
+              r"^\s*<Controls className=\"canvas-controls\" showInteractive=\{false\} />\n",
               "",
-              "canvas controls",
+              "React Flow controls",
           )
-
-          brand = '''      <div className="brand-pill floating-surface">
-            <button
-              type="button"
-              className="icon-button"
-              onClick={() => setBrowserOpen((open) => !open)}
-              aria-label={browserOpen ? "Hide topic browser" : "Show topic browser"}
-              title={browserOpen ? "Hide topics" : "Show topics"}
-            >
-              {browserOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
-            </button>
-            <div className="brand-mark">
-              <Network size={18} />
-            </div>
-            <div className="brand-copy">
-              <strong>PrereqGraph</strong>
-              <span>Autosaved · {nodes.length} topics</span>
-            </div>
-          </div>
-
-'''
-          app = replace_once(app, brand, "", "brand pill")
-
-          fit_button = '''        <button
-              type="button"
-              className="tool-button"
-              onClick={() => void fitView({ padding: 0.24, duration: 240 })}
-              aria-label="Fit graph to view"
-              title="Fit to view (F)"
-            >
-              <Maximize2 size={18} />
-              <kbd>F</kbd>
-            </button>
-'''
-          app = replace_once(app, fit_button, "", "fit view button")
-
-          app = replace_once(
+          app = sub_once(
               app,
-              '      {browserOpen ? (\n        <aside className="floating-panel topic-browser" aria-label="Topic browser">',
-              '      <aside className="floating-panel topic-browser" aria-label="Topic browser">',
-              "always visible topic browser",
+              r"\n\s*<div className=\"brand-pill floating-surface\">.*?</div>\n\n(?=\s*<nav className=\"tool-dock)",
+              "\n",
+              "brand pill",
           )
-          app = replace_once(
+          app = sub_once(
               app,
-              "        </aside>\n      ) : null}\n",
-              "      </aside>\n",
-              "topic browser conditional close",
+              r"\n\s*<button\n\s*type=\"button\"\n\s*className=\"tool-button\"\n"
+              r"\s*onClick=\{\(\) => void fitView\(\{ padding: 0\.24, duration: 240 \}\)\}\n"
+              r"\s*aria-label=\"Fit graph to view\"\n\s*title=\"Fit to view \(F\)\"\n"
+              r"\s*>\n\s*<Maximize2 size=\{18\} />\n\s*<kbd>F</kbd>\n\s*</button>",
+              "",
+              "fit view toolbar action",
+          )
+          app = sub_once(
+              app,
+              r"\s*\{browserOpen \? \(\n\s*(<aside className=\"floating-panel topic-browser\" aria-label=\"Topic browser\">)",
+              r"\n      \1",
+              "topic browser opening conditional",
+          )
+          app = sub_once(
+              app,
+              r"\s*</aside>\n\s*\) : null\}",
+              "\n      </aside>",
+              "topic browser closing conditional",
+          )
+          app = sub_once(
+              app,
+              r"\n\s*<div className=\"canvas-hint floating-surface\">.*?</div>\n\n(?=\s*\{cycleMessage)",
+              "\n",
+              "canvas interaction hint",
           )
 
-          hint = '''      <div className="canvas-hint floating-surface">
-            <span>Left drag to select</span>
-            <span>Middle drag to pan</span>
-            <span>
-              <kbd>Space</kbd> + drag to pan
-            </span>
-          </div>
-
-'''
-          app = replace_once(app, hint, "", "canvas hint")
-
-          forbidden_app = (
+          for token in (
               "brand-pill",
               "canvas-controls",
               "canvas-hint",
@@ -232,8 +197,7 @@ jobs:
               "browserOpen",
               "setBrowserOpen",
               'panActivationKeyCode="Space"',
-          )
-          for token in forbidden_app:
+          ):
               if token in app:
                   raise RuntimeError(f"App.tsx still contains {token!r}")
 
@@ -242,50 +206,34 @@ jobs:
           styles_path = Path("src/styles.css")
           styles = styles_path.read_text(encoding="utf-8")
 
-          for declaration in (
-              "  --xy-controls-button-background-color: var(--color-surface);\n",
-              "  --xy-controls-button-background-color-hover: var(--color-surface-hover);\n",
-              "  --xy-controls-button-color: var(--color-text);\n",
-              "  --xy-controls-button-border-color: var(--color-border);\n",
+          styles = re.sub(r"^\s*--xy-controls-button-[^\n]+\n", "", styles, flags=re.MULTILINE)
+          for pattern, label in (
+              (r"\n\.react-flow__attribution \{.*?\n\}\n", "attribution styles"),
+              (
+                  r"\n\.brand-pill \{.*?\n\}\n\n\.brand-mark \{.*?\n\}\n\n"
+                  r"\.brand-copy \{.*?\n\}\n\n\.brand-copy strong \{.*?\n\}\n\n"
+                  r"\.brand-copy span \{.*?\n\}\n",
+                  "brand styles",
+              ),
+              (
+                  r"\n\.canvas-controls \{.*?\n\}\n\n\.canvas-controls button \{.*?\n\}\n\n"
+                  r"\.canvas-controls button:hover \{.*?\n\}\n\n\.canvas-controls svg \{.*?\n\}\n",
+                  "control styles",
+              ),
+              (
+                  r"\n\.canvas-hint \{.*?\n\}\n\n\.canvas-hint span \{.*?\n\}\n",
+                  "hint styles",
+              ),
+              (r"\n@media \(max-width: 980px\) \{.*?\n\}\n", "hint media query"),
           ):
-              styles = replace_once(styles, declaration, "", "control design token")
-
-          block_patterns = (
-              r"\n\.react-flow__attribution \{.*?\n\}\n",
-              r"\n\.brand-pill \{.*?\n\}\n\n\.brand-mark \{.*?\n\}\n\n\.brand-copy \{.*?\n\}\n\n\.brand-copy strong \{.*?\n\}\n\n\.brand-copy span \{.*?\n\}\n",
-              r"\n\.canvas-controls \{.*?\n\}\n\n\.canvas-controls button \{.*?\n\}\n\n\.canvas-controls button:hover \{.*?\n\}\n\n\.canvas-controls svg \{.*?\n\}\n",
-              r"\n\.canvas-hint \{.*?\n\}\n\n\.canvas-hint span \{.*?\n\}\n",
-              r"\n@media \(max-width: 980px\) \{.*?\n\}\n",
-          )
-          for pattern in block_patterns:
-              styles, count = re.subn(pattern, "\n", styles, count=1, flags=re.DOTALL)
-              if count != 1:
-                  raise RuntimeError(f"styles block did not match: {pattern}")
+              styles = sub_once(styles, pattern, "\n", label)
 
           styles = replace_once(styles, "  top: 76px;\n", "  top: var(--space-3);\n", "browser top")
           styles = replace_once(styles, "  bottom: 68px;\n", "  bottom: var(--space-3);\n", "browser bottom")
           styles = replace_once(styles, "  bottom: 64px;\n", "  bottom: var(--space-3);\n", "minimap bottom")
-          styles = replace_once(styles, "  .brand-copy,\n", "", "responsive brand selector")
-          styles = replace_once(
-              styles,
-              '''
-            .brand-pill {
-              padding-right: var(--space-1);
-            }
-''',
-              "",
-              "responsive brand block",
-          )
-          styles = replace_once(
-              styles,
-              '''
-            .canvas-controls {
-              display: none;
-            }
-''',
-              "",
-              "responsive controls block",
-          )
+          styles = re.sub(r"^\s*\.brand-copy,\n", "", styles, flags=re.MULTILINE)
+          styles = re.sub(r"\n\s*\.brand-pill \{.*?\n\s*\}\n", "\n", styles, count=1, flags=re.DOTALL)
+          styles = re.sub(r"\n\s*\.canvas-controls \{.*?\n\s*\}\n", "\n", styles, count=1, flags=re.DOTALL)
 
           for token in ("brand-pill", "brand-copy", "brand-mark", "canvas-controls", "canvas-hint"):
               if token in styles:
@@ -302,7 +250,22 @@ jobs:
               "README pan instructions",
           )
           readme_path.write_text(readme, encoding="utf-8")
+
+          print("Canvas cleanup transformations applied successfully.")
           PY
+          code=$?
+          cat ui-cleanup-report.txt
+
+          if [ "$code" -ne 0 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add ui-cleanup-report.txt
+            git commit -m "ci: record canvas cleanup failure"
+            git push
+            exit "$code"
+          fi
+
+          rm ui-cleanup-report.txt
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
