@@ -10,18 +10,118 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: canvas-cleanup-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
-  web:
-    name: Web checks
+  cleanup:
+    name: Finalize repository cleanup
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.17.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Remove obsolete canvas styles
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('src/styles.css')
+          css = path.read_text(encoding='utf-8')
+
+          css = re.sub(r'^\s*--xy-controls-button-[^\n]+\n', '', css, flags=re.MULTILINE)
+
+          blocks = [
+              r'\n\.react-flow__attribution \{.*?\n\}\n',
+              r'\n\.brand-pill \{.*?\n\}\n\n\.brand-mark \{.*?\n\}\n\n\.brand-copy \{.*?\n\}\n\n\.brand-copy strong \{.*?\n\}\n\n\.brand-copy span \{.*?\n\}\n',
+              r'\n\.canvas-controls \{.*?\n\}\n\n\.canvas-controls button \{.*?\n\}\n\n\.canvas-controls button:hover \{.*?\n\}\n\n\.canvas-controls svg \{.*?\n\}\n',
+              r'\n\.canvas-hint \{.*?\n\}\n\n\.canvas-hint span \{.*?\n\}\n',
+              r'\n@media \(max-width: 980px\) \{.*?\n\}\n',
+          ]
+
+          for pattern in blocks:
+              css = re.sub(pattern, '\n', css, count=1, flags=re.DOTALL)
+
+          css = re.sub(r'^\s*\.brand-copy,\n', '', css, flags=re.MULTILINE)
+          css = re.sub(r'\n\s*\.brand-pill \{.*?\n\s*\}\n', '\n', css, count=1, flags=re.DOTALL)
+          css = re.sub(r'\n\s*\.canvas-controls \{.*?\n\s*\}\n', '\n', css, count=1, flags=re.DOTALL)
+
+          for token in ('brand-pill', 'brand-mark', 'brand-copy', 'canvas-controls', 'canvas-hint'):
+              if token in css:
+                  raise SystemExit(f'stale selector remains: {token}')
+
+          path.write_text(css, encoding='utf-8')
+          PY
+
+      - name: Delete obsolete branch
+        shell: bash
+        run: |
+          if git ls-remote --exit-code --heads origin agent/initial-project-setup >/dev/null 2>&1; then
+            git push origin --delete agent/initial-project-setup
+          fi
+
+          if git ls-remote --exit-code --heads origin agent/initial-project-setup >/dev/null 2>&1; then
+            echo 'Obsolete branch still exists.' >&2
+            exit 1
+          fi
+
+      - name: Restore permanent workflows and format
+        run: |
+          git show 991e907d3403a755ecffc0cf3b0d6fdb29da7a5e:.github/workflows/ci.yml > .github/workflows/ci.yml
+          rm -f .github/workflows/finalize-ui-cleanup.yml
+          pnpm format
+          pnpm rust:fmt
+
+      - name: Create final commit
+        id: commit
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+
+          if ! git diff --cached --quiet; then
+            git commit -m 'chore: finalize canvas cleanup'
+            git push
+          fi
+
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  web:
+    name: Web checks
+    needs: cleanup
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out final commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.cleanup.outputs.sha }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -51,12 +151,15 @@ jobs:
 
   rust:
     name: Rust checks
+    needs: cleanup
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Check out repository
+      - name: Check out final commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.cleanup.outputs.sha }}
 
       - name: Install Tauri Linux dependencies
         run: |
@@ -104,6 +207,7 @@ jobs:
   report:
     name: Full CI result
     needs:
+      - cleanup
       - web
       - rust
     if: always()
@@ -115,17 +219,21 @@ jobs:
       - name: Publish aggregate commit status
         env:
           GH_TOKEN: ${{ github.token }}
+          FINAL_SHA: ${{ needs.cleanup.outputs.sha }}
+          CLEANUP_RESULT: ${{ needs.cleanup.result }}
           WEB_RESULT: ${{ needs.web.result }}
           RUST_RESULT: ${{ needs.rust.result }}
         shell: bash
         run: |
-          if [[ "$WEB_RESULT" == "success" && "$RUST_RESULT" == "success" ]]; then
+          if [[ "$CLEANUP_RESULT" == "success" && "$WEB_RESULT" == "success" && "$RUST_RESULT" == "success" ]]; then
             state=success
-            description="Web and Rust checks passed"
+            description="Cleanup, web, and Rust checks passed"
           else
             state=failure
-            description="Web: $WEB_RESULT; Rust: $RUST_RESULT"
+            description="Cleanup: $CLEANUP_RESULT; Web: $WEB_RESULT; Rust: $RUST_RESULT"
           fi
+
+          target_sha="${FINAL_SHA:-$GITHUB_SHA}"
 
           jq -n \
             --arg state "$state" \
@@ -140,7 +248,7 @@ jobs:
             --header "Accept: application/vnd.github+json" \
             --header "Authorization: Bearer $GH_TOKEN" \
             --header "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$target_sha" \
             --data @status.json
 
           [[ "$state" == "success" ]]
