@@ -3,4 +3,6 @@ dist/
 .vite/
 *.log
 .DS_Store
+package-lock.json
+yarn.lock
 src-tauri/target/
