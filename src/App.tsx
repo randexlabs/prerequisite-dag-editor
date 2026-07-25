@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { TopicNode } from "./components/TopicNode";
 import { statusMeta } from "./components/status-meta";
+import { getGraphNeighborhood } from "./domain/graph";
 import { useGraphStore } from "./stores/graph-store";
 
 const nodeTypes = { topic: TopicNode };
@@ -46,6 +47,10 @@ const defaultEdgeOptions: DefaultEdgeOptions = {
 };
 
 type Theme = "light" | "dark";
+
+function mergeClassNames(...values: Array<string | false | null | undefined>): string {
+  return values.filter(Boolean).join(" ");
+}
 
 function getInitialTheme(): Theme {
   const stored = window.localStorage.getItem("prereqgraph-theme");
@@ -80,12 +85,44 @@ function Workspace() {
   const [isBoxSelecting, setIsBoxSelecting] = useState(false);
   const [query, setQuery] = useState("");
 
+  const {
+    renderedNodes,
+    renderedEdges,
+    selectedNodeIds,
+    adjacentNodeIds,
+  } = useMemo(() => {
+    const selectedIds = new Set(
+      nodes.filter((node) => node.selected).map((node) => node.id),
+    );
+    const neighborhood = getGraphNeighborhood(edges, selectedIds);
+
+    return {
+      selectedNodeIds: selectedIds,
+      adjacentNodeIds: neighborhood.nodeIds,
+      renderedNodes: nodes.map((node) => ({
+        ...node,
+        className: mergeClassNames(
+          node.className,
+          !node.selected && neighborhood.nodeIds.has(node.id) && "is-adjacent-node",
+        ),
+      })),
+      renderedEdges: edges.map((edge) => ({
+        ...edge,
+        className: mergeClassNames(
+          edge.className,
+          neighborhood.edgeIds.has(edge.id) && "is-adjacent-edge",
+        ),
+      })),
+    };
+  }, [edges, nodes]);
+
   const filteredNodes = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
     if (!normalizedQuery) return nodes;
     return nodes.filter((node) => node.data.label.toLocaleLowerCase().includes(normalizedQuery));
   }, [nodes, query]);
-  const selectedNodeCount = nodes.filter((node) => node.selected).length;
+
+  const selectedNodeCount = selectedNodeIds.size;
   const selectedEdgeCount = edges.filter((edge) => edge.selected).length;
   const selectedElementCount = selectedNodeCount + selectedEdgeCount;
 
@@ -169,8 +206,8 @@ function Workspace() {
     <main className={`app-shell${isBoxSelecting ? " is-box-selecting" : ""}`}>
       <section className="canvas-surface" aria-label="Prerequisite graph canvas">
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
+          nodes={renderedNodes}
+          edges={renderedEdges}
           nodeTypes={nodeTypes}
           colorMode={theme}
           onNodesChange={onNodesChange}
@@ -353,12 +390,17 @@ function Workspace() {
             {filteredNodes.map((node) => {
               const item = statusMeta[node.data.status];
               const StatusIcon = item.icon;
+              const isAdjacent = !node.selected && adjacentNodeIds.has(node.id);
 
               return (
                 <button
                   key={node.id}
                   type="button"
-                  className={`topic-list-item${node.selected ? " is-selected" : ""}`}
+                  className={mergeClassNames(
+                    "topic-list-item",
+                    node.selected && "is-selected",
+                    isAdjacent && "is-adjacent",
+                  )}
                   onClick={(event) =>
                     setSelectedNodes(
                       [node.id],
