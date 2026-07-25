@@ -1,16 +1,64 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Background, Controls, MiniMap, ReactFlow } from "@xyflow/react";
-import { Network, Plus, Save, Trash2 } from "lucide-react";
+import {
+  Background,
+  BackgroundVariant,
+  Controls,
+  MarkerType,
+  MiniMap,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+} from "@xyflow/react";
+import {
+  BookOpen,
+  CheckCircle2,
+  Circle,
+  ListTree,
+  Map,
+  Maximize2,
+  Moon,
+  MousePointer2,
+  Network,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Save,
+  Search,
+  Sun,
+  Trash2,
+  X,
+} from "lucide-react";
+import { TopicNode } from "./components/TopicNode";
 import type { LearningNode, MasteryStatus } from "./domain/graph";
 import { useGraphStore } from "./stores/graph-store";
+
+const nodeTypes = { topic: TopicNode };
+
+type Theme = "light" | "dark";
 
 type TopicInspectorProps = {
   node: LearningNode;
   onSave: (label: string, status: MasteryStatus) => void;
   onDelete: () => void;
+  onClose: () => void;
 };
 
-function TopicInspector({ node, onSave, onDelete }: TopicInspectorProps) {
+const statusMeta: Record<
+  MasteryStatus,
+  { label: string; icon: typeof Circle }
+> = {
+  unknown: { label: "Not started", icon: Circle },
+  learning: { label: "Learning", icon: BookOpen },
+  mastered: { label: "Mastered", icon: CheckCircle2 },
+};
+
+function getInitialTheme(): Theme {
+  const stored = window.localStorage.getItem("prereqgraph-theme");
+  if (stored === "light" || stored === "dark") return stored;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function TopicInspector({ node, onSave, onDelete, onClose }: TopicInspectorProps) {
   const [label, setLabel] = useState(node.data.label);
   const [status, setStatus] = useState<MasteryStatus>(node.data.status);
 
@@ -21,13 +69,16 @@ function TopicInspector({ node, onSave, onDelete }: TopicInspectorProps) {
   };
 
   return (
-    <form className="topic-inspector" onSubmit={submit}>
-      <div className="section-heading">
+    <form className="floating-panel inspector-panel" onSubmit={submit}>
+      <header className="panel-header">
         <div>
           <p className="eyebrow">Selected topic</p>
           <h2>Edit topic</h2>
         </div>
-      </div>
+        <button type="button" className="icon-button" onClick={onClose} aria-label="Close inspector">
+          <X size={17} />
+        </button>
+      </header>
 
       <label className="field">
         <span>Name</span>
@@ -40,28 +91,43 @@ function TopicInspector({ node, onSave, onDelete }: TopicInspectorProps) {
         />
       </label>
 
-      <label className="field">
-        <span>Status</span>
-        <select value={status} onChange={(event) => setStatus(event.target.value as MasteryStatus)}>
-          <option value="unknown">Not started</option>
-          <option value="learning">Learning</option>
-          <option value="mastered">Mastered</option>
-        </select>
-      </label>
+      <fieldset className="status-fieldset">
+        <legend>Status</legend>
+        <div className="status-options">
+          {(Object.keys(statusMeta) as MasteryStatus[]).map((value) => {
+            const item = statusMeta[value];
+            const StatusIcon = item.icon;
+
+            return (
+              <label key={value} className={`status-option status-${value}`}>
+                <input
+                  type="radio"
+                  name="status"
+                  value={value}
+                  checked={status === value}
+                  onChange={() => setStatus(value)}
+                />
+                <StatusIcon size={16} aria-hidden="true" />
+                <span>{item.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
 
       <div className="inspector-actions">
         <button type="submit" className="primary-button grow">
-          <Save size={16} /> Save / rename
+          <Save size={16} /> Save changes
         </button>
-        <button type="button" className="danger-button" onClick={onDelete} aria-label="Delete topic">
-          <Trash2 size={16} />
+        <button type="button" className="danger-button" onClick={onDelete}>
+          <Trash2 size={16} /> Delete
         </button>
       </div>
     </form>
   );
 }
 
-export function App() {
+function Workspace() {
   const {
     nodes,
     edges,
@@ -76,12 +142,32 @@ export function App() {
     selectNode,
     clearCycleMessage,
   } = useGraphStore();
+  const { fitView } = useReactFlow();
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [browserOpen, setBrowserOpen] = useState(true);
+  const [minimapOpen, setMinimapOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
   const displayedNodes = useMemo(
-    () => nodes.map((node) => ({ ...node, selected: node.id === selectedNodeId })),
+    () =>
+      nodes.map((node) => ({
+        ...node,
+        type: "topic",
+        selected: node.id === selectedNodeId,
+      })),
     [nodes, selectedNodeId],
   );
+  const filteredNodes = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    if (!normalizedQuery) return nodes;
+    return nodes.filter((node) => node.data.label.toLocaleLowerCase().includes(normalizedQuery));
+  }, [nodes, query]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("prereqgraph-theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -90,17 +176,31 @@ export function App() {
 
       if (event.key === "Escape") {
         selectNode(null);
+        return;
       }
 
       if ((event.key === "Delete" || event.key === "Backspace") && selectedNodeId && !isEditing) {
         event.preventDefault();
         deleteNode(selectedNodeId);
+        return;
+      }
+
+      if (isEditing || event.metaKey || event.ctrlKey || event.altKey) return;
+
+      if (event.key.toLocaleLowerCase() === "n") {
+        event.preventDefault();
+        addNode();
+      }
+
+      if (event.key.toLocaleLowerCase() === "f") {
+        event.preventDefault();
+        void fitView({ padding: 0.24, duration: 240 });
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [deleteNode, selectNode, selectedNodeId]);
+  }, [addNode, deleteNode, fitView, selectNode, selectedNodeId]);
 
   const removeSelectedNode = () => {
     if (!selectedNode) return;
@@ -112,96 +212,214 @@ export function App() {
     if (confirmed) deleteNode(selectedNode.id);
   };
 
+  const addTopic = () => {
+    addNode();
+    setBrowserOpen(true);
+  };
+
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark"><Network size={20} /></div>
-          <div>
-            <strong>PrereqGraph</strong>
-            <span>Prerequisite DAG editor</span>
-          </div>
-        </div>
-        <button type="button" className="primary-button" onClick={addNode}>
-          <Plus size={17} /> Add topic
-        </button>
-      </header>
+      <section className="canvas-surface" aria-label="Prerequisite graph canvas">
+        <ReactFlow
+          nodes={displayedNodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          colorMode={theme}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={connect}
+          onNodeClick={(_, node) => selectNode(node.id)}
+          onPaneClick={() => selectNode(null)}
+          deleteKeyCode={null}
+          selectionOnDrag
+          panOnScroll
+          minZoom={0.2}
+          maxZoom={2.2}
+          fitView
+          fitViewOptions={{ padding: 0.24 }}
+          connectionLineStyle={{ stroke: "var(--color-accent)", strokeWidth: 2 }}
+          defaultEdgeOptions={{
+            type: "smoothstep",
+            markerEnd: { type: MarkerType.ArrowClosed },
+            style: { stroke: "var(--color-edge)", strokeWidth: 2 },
+            interactionWidth: 20,
+          }}
+        >
+          <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} color="var(--color-canvas-grid)" />
+          <Controls className="canvas-controls" showInteractive={false} />
+          {minimapOpen ? (
+            <MiniMap
+              className="canvas-minimap"
+              pannable
+              zoomable
+              nodeStrokeWidth={3}
+              nodeColor={(node) => `var(--color-status-${node.data.status ?? "unknown"})`}
+            />
+          ) : null}
+        </ReactFlow>
 
-      <section className="workspace">
-        <aside className="sidebar">
-          <div className="sidebar-intro">
-            <p className="eyebrow">Topics</p>
-            <h1>Build the learning path.</h1>
-            <p>Select a topic to rename it, change its status, or remove it.</p>
-          </div>
-
-          <div className="topic-list-heading">
-            <strong>{nodes.length} topics</strong>
-            <button type="button" className="icon-button" onClick={addNode} aria-label="Add topic">
-              <Plus size={16} />
+        {nodes.length === 0 ? (
+          <div className="empty-canvas">
+            <div className="empty-canvas-icon"><Network size={24} /></div>
+            <h1>Start with your first topic</h1>
+            <p>Add a topic, then drag between its handles to define prerequisites.</p>
+            <button type="button" className="primary-button" onClick={addTopic}>
+              <Plus size={17} /> Add topic
             </button>
           </div>
+        ) : null}
+      </section>
+
+      <div className="brand-pill floating-surface">
+        <button
+          type="button"
+          className="icon-button"
+          onClick={() => setBrowserOpen((open) => !open)}
+          aria-label={browserOpen ? "Hide topic browser" : "Show topic browser"}
+          title={browserOpen ? "Hide topics" : "Show topics"}
+        >
+          {browserOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+        </button>
+        <div className="brand-mark"><Network size={18} /></div>
+        <div className="brand-copy">
+          <strong>PrereqGraph</strong>
+          <span>{nodes.length} topics</span>
+        </div>
+      </div>
+
+      <nav className="tool-dock floating-surface" aria-label="Canvas tools">
+        <button type="button" className="tool-button is-active" aria-label="Select tool" title="Select">
+          <MousePointer2 size={18} />
+          <kbd>1</kbd>
+        </button>
+        <span className="dock-divider" />
+        <button type="button" className="tool-button" onClick={addTopic} aria-label="Add topic" title="Add topic (N)">
+          <Plus size={19} />
+          <kbd>N</kbd>
+        </button>
+        <button
+          type="button"
+          className="tool-button"
+          onClick={() => void fitView({ padding: 0.24, duration: 240 })}
+          aria-label="Fit graph to view"
+          title="Fit to view (F)"
+        >
+          <Maximize2 size={18} />
+          <kbd>F</kbd>
+        </button>
+        <button
+          type="button"
+          className={`tool-button${minimapOpen ? " is-active" : ""}`}
+          onClick={() => setMinimapOpen((open) => !open)}
+          aria-pressed={minimapOpen}
+          aria-label="Toggle minimap"
+          title="Toggle minimap"
+        >
+          <Map size={18} />
+        </button>
+        <span className="dock-divider" />
+        <button
+          type="button"
+          className="tool-button"
+          onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+        >
+          {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+      </nav>
+
+      {browserOpen ? (
+        <aside className="floating-panel topic-browser" aria-label="Topic browser">
+          <header className="panel-header">
+            <div>
+              <p className="eyebrow">Workspace</p>
+              <h2>Topics</h2>
+            </div>
+            <button type="button" className="icon-button" onClick={addTopic} aria-label="Add topic">
+              <Plus size={17} />
+            </button>
+          </header>
+
+          <label className="search-field">
+            <Search size={16} aria-hidden="true" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search topics"
+              aria-label="Search topics"
+            />
+            {query ? (
+              <button type="button" onClick={() => setQuery("")} aria-label="Clear search">
+                <X size={14} />
+              </button>
+            ) : null}
+          </label>
 
           <div className="topic-list" role="list">
-            {nodes.map((node) => (
-              <button
-                key={node.id}
-                type="button"
-                className={`topic-list-item${node.id === selectedNodeId ? " selected" : ""}`}
-                onClick={() => selectNode(node.id)}
-                role="listitem"
-              >
-                <i className={`dot ${node.data.status}`} />
-                <span>{node.data.label}</span>
-              </button>
-            ))}
-          </div>
+            {filteredNodes.map((node) => {
+              const item = statusMeta[node.data.status];
+              const StatusIcon = item.icon;
 
-          {selectedNode ? (
-            <TopicInspector
-              key={selectedNode.id}
-              node={selectedNode}
-              onSave={(label, status) => updateNode(selectedNode.id, { label, status })}
-              onDelete={removeSelectedNode}
-            />
-          ) : (
-            <div className="empty-inspector">
-              <p>Select a topic in the list or canvas to edit it.</p>
-            </div>
-          )}
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  className={`topic-list-item${node.id === selectedNodeId ? " is-selected" : ""}`}
+                  onClick={() => selectNode(node.id)}
+                  role="listitem"
+                >
+                  <span className={`status-icon status-${node.data.status}`}>
+                    <StatusIcon size={15} aria-hidden="true" />
+                  </span>
+                  <span className="topic-list-copy">
+                    <strong>{node.data.label}</strong>
+                    <small>{item.label}</small>
+                  </span>
+                </button>
+              );
+            })}
 
-          <div className="legend">
-            <span><i className="dot mastered" /> Mastered</span>
-            <span><i className="dot learning" /> Learning</span>
-            <span><i className="dot unknown" /> Not started</span>
+            {filteredNodes.length === 0 ? (
+              <div className="empty-list">
+                <ListTree size={20} />
+                <span>No matching topics</span>
+              </div>
+            ) : null}
           </div>
         </aside>
+      ) : null}
 
-        <div className="canvas-card">
-          <ReactFlow
-            nodes={displayedNodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={connect}
-            onNodeClick={(_, node) => selectNode(node.id)}
-            onNodeDoubleClick={(_, node) => selectNode(node.id)}
-            onPaneClick={() => selectNode(null)}
-            deleteKeyCode={null}
-            fitView
-          >
-            <Background gap={22} size={1} />
-            <MiniMap pannable zoomable />
-            <Controls />
-          </ReactFlow>
-        </div>
-      </section>
+      {selectedNode ? (
+        <TopicInspector
+          key={selectedNode.id}
+          node={selectedNode}
+          onSave={(label, status) => updateNode(selectedNode.id, { label, status })}
+          onDelete={removeSelectedNode}
+          onClose={() => selectNode(null)}
+        />
+      ) : null}
+
+      <div className="canvas-hint floating-surface">
+        <span><kbd>Space</kbd> + drag to pan</span>
+        <span><kbd>N</kbd> new topic</span>
+        <span><kbd>F</kbd> fit view</span>
+      </div>
 
       {cycleMessage ? (
         <button className="toast" type="button" onClick={clearCycleMessage}>
-          {cycleMessage}
+          <strong>Connection rejected</strong>
+          <span>{cycleMessage}</span>
         </button>
       ) : null}
     </main>
+  );
+}
+
+export function App() {
+  return (
+    <ReactFlowProvider>
+      <Workspace />
+    </ReactFlowProvider>
   );
 }
