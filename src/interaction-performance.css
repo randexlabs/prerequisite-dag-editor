@@ -1,0 +1,19 @@
+.react-flow__selection,
+.react-flow__nodesselection-rect {
+  contain: layout style paint;
+  will-change: transform, width, height;
+}
+
+.app-shell.is-box-selecting .topic-node-card,
+.app-shell.is-box-selecting .topic-node-card:hover,
+.app-shell.is-box-selecting .topic-node-card.is-selected {
+  box-shadow: none;
+  transform: none;
+  transition: none;
+}
+
+.app-shell.is-box-selecting .topic-list-item,
+.app-shell.is-box-selecting .react-flow__edge-path,
+.app-shell.is-box-selecting .topic-handle {
+  transition: none;
+}
