@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { memo, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { ChevronDown } from "lucide-react";
 import type { LearningNode, MasteryStatus } from "../domain/graph";
 import { useGraphStore } from "../stores/graph-store";
 import { masteryStatuses, statusMeta } from "./status-meta";
 
-export function TopicNode({ id, data, selected, isConnectable }: NodeProps<LearningNode>) {
+export const TopicNode = memo(function TopicNode({
+  id,
+  data,
+  selected,
+  isConnectable,
+}: NodeProps<LearningNode>) {
   const updateNode = useGraphStore((state) => state.updateNode);
   const setSelectedNodes = useGraphStore((state) => state.setSelectedNodes);
   const beginHistoryTransaction = useGraphStore((state) => state.beginHistoryTransaction);
@@ -181,4 +186,4 @@ export function TopicNode({ id, data, selected, isConnectable }: NodeProps<Learn
       />
     </article>
   );
-}
+});
