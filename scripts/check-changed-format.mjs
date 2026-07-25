@@ -5,11 +5,9 @@ const headSha = process.env.FORMAT_HEAD_SHA ?? "HEAD";
 const isMissingBase = !baseSha || /^0+$/.test(baseSha);
 
 function diffFiles(fromSha, toSha) {
-  return execFileSync(
-    "git",
-    ["diff", "--name-only", "--diff-filter=ACMR", fromSha, toSha],
-    { encoding: "utf8" },
-  );
+  return execFileSync("git", ["diff", "--name-only", "--diff-filter=ACMR", fromSha, toSha], {
+    encoding: "utf8",
+  });
 }
 
 function listChangedFiles() {

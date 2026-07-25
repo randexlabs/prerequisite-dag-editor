@@ -64,10 +64,7 @@ export function duplicateSelectedTopics(): string[] {
   });
 
   useGraphStore.setState({
-    nodes: [
-      ...state.nodes.map((node) => ({ ...node, selected: false })),
-      ...duplicates,
-    ],
+    nodes: [...state.nodes.map((node) => ({ ...node, selected: false })), ...duplicates],
     edges: state.edges.map((edge) => ({ ...edge, selected: false })),
     past: [
       ...state.past,

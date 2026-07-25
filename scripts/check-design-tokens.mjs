@@ -40,7 +40,9 @@ function visit(path) {
 visit(sourceRoot);
 
 if (violations.length > 0) {
-  console.error("Raw colors are not allowed outside src/theme.css. Use a semantic design token instead.\n");
+  console.error(
+    "Raw colors are not allowed outside src/theme.css. Use a semantic design token instead.\n",
+  );
   for (const violation of violations) {
     console.error(`${violation.file}:${violation.line} -> ${violation.colors}`);
   }

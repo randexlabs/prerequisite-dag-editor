@@ -10,15 +10,10 @@ export function getTopicNodeWidth(title: string): number {
   const visibleLength = Math.max(1, title.trim().length);
   const estimatedWidth = TOPIC_NODE_FIXED_SPACE + visibleLength * TOPIC_TITLE_CHARACTER_WIDTH;
 
-  return Math.round(
-    Math.min(TOPIC_NODE_MAX_WIDTH, Math.max(TOPIC_NODE_MIN_WIDTH, estimatedWidth)),
-  );
+  return Math.round(Math.min(TOPIC_NODE_MAX_WIDTH, Math.max(TOPIC_NODE_MIN_WIDTH, estimatedWidth)));
 }
 
-export function recenterNodeForTitle(
-  node: LearningNode,
-  nextTitle: string,
-): LearningNode {
+export function recenterNodeForTitle(node: LearningNode, nextTitle: string): LearningNode {
   const previousWidth = getTopicNodeWidth(node.data.label);
   const nextWidth = getTopicNodeWidth(nextTitle);
 

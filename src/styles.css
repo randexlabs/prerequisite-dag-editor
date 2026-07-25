@@ -107,7 +107,8 @@ kbd {
 .react-flow__edge-path {
   stroke: var(--color-edge);
   stroke-width: 2;
-  transition: stroke var(--duration-fast) var(--easing-standard),
+  transition:
+    stroke var(--duration-fast) var(--easing-standard),
     stroke-width var(--duration-fast) var(--easing-standard);
 }
 
@@ -196,7 +197,8 @@ kbd {
   color: var(--color-text-muted);
   background: transparent;
   cursor: pointer;
-  transition: color var(--duration-fast) var(--easing-standard),
+  transition:
+    color var(--duration-fast) var(--easing-standard),
     background var(--duration-fast) var(--easing-standard),
     transform var(--duration-fast) var(--easing-standard);
 }
@@ -295,7 +297,8 @@ kbd {
   border-radius: var(--radius-md);
   color: var(--color-text-muted);
   background: var(--color-surface-raised);
-  transition: border-color var(--duration-fast) var(--easing-standard),
+  transition:
+    border-color var(--duration-fast) var(--easing-standard),
     box-shadow var(--duration-fast) var(--easing-standard);
 }
 
@@ -360,7 +363,8 @@ kbd {
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: border-color var(--duration-fast) var(--easing-standard),
+  transition:
+    border-color var(--duration-fast) var(--easing-standard),
     background var(--duration-fast) var(--easing-standard),
     transform var(--duration-fast) var(--easing-standard);
 }
@@ -446,7 +450,8 @@ kbd {
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--easing-standard),
+  transition:
+    background var(--duration-fast) var(--easing-standard),
     transform var(--duration-fast) var(--easing-standard),
     box-shadow var(--duration-fast) var(--easing-standard);
 }
@@ -482,7 +487,8 @@ kbd {
   color: var(--color-text);
   background: var(--color-surface);
   box-shadow: var(--shadow-node);
-  transition: border-color var(--duration-fast) var(--easing-standard),
+  transition:
+    border-color var(--duration-fast) var(--easing-standard),
     box-shadow var(--duration-normal) var(--easing-standard),
     transform var(--duration-fast) var(--easing-standard);
 }
@@ -570,7 +576,8 @@ kbd {
   font-size: 11px;
   font-weight: 650;
   cursor: pointer;
-  transition: filter var(--duration-fast) var(--easing-standard),
+  transition:
+    filter var(--duration-fast) var(--easing-standard),
     box-shadow var(--duration-fast) var(--easing-standard);
 }
 
@@ -630,7 +637,8 @@ kbd {
   background: var(--color-accent);
   opacity: 0.72;
   transform: none;
-  transition: opacity var(--duration-fast) var(--easing-standard),
+  transition:
+    opacity var(--duration-fast) var(--easing-standard),
     box-shadow var(--duration-fast) var(--easing-standard);
 }
 

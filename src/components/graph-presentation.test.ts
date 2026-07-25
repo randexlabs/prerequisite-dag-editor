@@ -21,10 +21,7 @@ const edges: PrerequisiteEdge[] = [
 
 describe("decorateEdgesForHighlight", () => {
   it("applies an inline highlight to descendant edges and their arrow markers", () => {
-    const [highlighted] = decorateEdgesForHighlight(
-      edges,
-      new Set(["programming-functions"]),
-    );
+    const [highlighted] = decorateEdgesForHighlight(edges, new Set(["programming-functions"]));
 
     expect(highlighted.className).toContain("existing-edge-class");
     expect(highlighted.className).toContain("is-adjacent-edge");
@@ -39,10 +36,7 @@ describe("decorateEdgesForHighlight", () => {
   });
 
   it("leaves unrelated edges visually unchanged", () => {
-    const [, unrelated] = decorateEdgesForHighlight(
-      edges,
-      new Set(["programming-functions"]),
-    );
+    const [, unrelated] = decorateEdgesForHighlight(edges, new Set(["programming-functions"]));
 
     expect(unrelated.className).toBeUndefined();
     expect(unrelated.style).toEqual({

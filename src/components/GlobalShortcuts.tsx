@@ -6,9 +6,7 @@ export function GlobalShortcuts() {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      const isEditing = target?.matches(
-        "input, textarea, select, [contenteditable='true']",
-      );
+      const isEditing = target?.matches("input, textarea, select, [contenteditable='true']");
 
       if (isEditing || event.repeat || !isDuplicateShortcut(event)) return;
 

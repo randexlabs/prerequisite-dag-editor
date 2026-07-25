@@ -164,9 +164,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
 
       return {
         ...(commitsImmediately ? historyState(state) : {}),
-        documentRevision: commitsImmediately
-          ? state.documentRevision + 1
-          : state.documentRevision,
+        documentRevision: commitsImmediately ? state.documentRevision + 1 : state.documentRevision,
         nodes: nextNodes,
         edges: nextEdges,
       };
@@ -177,9 +175,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       const hasDurableChange = changes.some((change) => change.type === "remove");
       return {
         ...(hasDurableChange ? historyState(state) : {}),
-        documentRevision: hasDurableChange
-          ? state.documentRevision + 1
-          : state.documentRevision,
+        documentRevision: hasDurableChange ? state.documentRevision + 1 : state.documentRevision,
         edges: applyEdgeChanges(changes, state.edges),
       };
     }),
@@ -253,9 +249,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
 
       return {
         ...(commitsImmediately ? historyState(state) : {}),
-        documentRevision: commitsImmediately
-          ? state.documentRevision + 1
-          : state.documentRevision,
+        documentRevision: commitsImmediately ? state.documentRevision + 1 : state.documentRevision,
         nodes: state.nodes.map((node) =>
           node.id === id
             ? {

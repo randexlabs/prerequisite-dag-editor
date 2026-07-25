@@ -86,15 +86,8 @@ function Workspace() {
   const [isBoxSelecting, setIsBoxSelecting] = useState(false);
   const [query, setQuery] = useState("");
 
-  const {
-    renderedNodes,
-    renderedEdges,
-    selectedNodeIds,
-    adjacentNodeIds,
-  } = useMemo(() => {
-    const selectedIds = new Set(
-      nodes.filter((node) => node.selected).map((node) => node.id),
-    );
+  const { renderedNodes, renderedEdges, selectedNodeIds, adjacentNodeIds } = useMemo(() => {
+    const selectedIds = new Set(nodes.filter((node) => node.selected).map((node) => node.id));
     const neighborhood = getGraphNeighborhood(edges, selectedIds);
 
     return {
@@ -182,15 +175,7 @@ function Workspace() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [
-    addNode,
-    clearSelection,
-    deleteSelected,
-    fitView,
-    redo,
-    selectedElementCount,
-    undo,
-  ]);
+  }, [addNode, clearSelection, deleteSelected, fitView, redo, selectedElementCount, undo]);
 
   const addTopic = () => {
     addNode();
@@ -251,7 +236,9 @@ function Workspace() {
 
         {nodes.length === 0 ? (
           <div className="empty-canvas">
-            <div className="empty-canvas-icon"><Network size={24} /></div>
+            <div className="empty-canvas-icon">
+              <Network size={24} />
+            </div>
             <h1>Start with your first topic</h1>
             <p>Add a topic, then drag between its handles to define prerequisites.</p>
             <button type="button" className="primary-button" onClick={addTopic}>
@@ -271,7 +258,9 @@ function Workspace() {
         >
           {browserOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
         </button>
-        <div className="brand-mark"><Network size={18} /></div>
+        <div className="brand-mark">
+          <Network size={18} />
+        </div>
         <div className="brand-copy">
           <strong>PrereqGraph</strong>
           <span>Autosaved · {nodes.length} topics</span>
@@ -300,11 +289,22 @@ function Workspace() {
           <Redo2 size={18} />
         </button>
         <span className="dock-divider" />
-        <button type="button" className="tool-button is-active" aria-label="Select tool" title="Select">
+        <button
+          type="button"
+          className="tool-button is-active"
+          aria-label="Select tool"
+          title="Select"
+        >
           <MousePointer2 size={18} />
           <kbd>1</kbd>
         </button>
-        <button type="button" className="tool-button" onClick={addTopic} aria-label="Add topic" title="Add topic (N)">
+        <button
+          type="button"
+          className="tool-button"
+          onClick={addTopic}
+          aria-label="Add topic"
+          title="Add topic (N)"
+        >
           <Plus size={19} />
           <kbd>N</kbd>
         </button>
@@ -428,7 +428,9 @@ function Workspace() {
       <div className="canvas-hint floating-surface">
         <span>Left drag to select</span>
         <span>Middle drag to pan</span>
-        <span><kbd>Space</kbd> + drag to pan</span>
+        <span>
+          <kbd>Space</kbd> + drag to pan
+        </span>
       </div>
 
       {cycleMessage ? (

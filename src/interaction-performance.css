@@ -20,7 +20,8 @@
 .topic-node-card {
   min-width: 218px;
   max-width: 420px;
-  transition: width var(--duration-fast) var(--easing-standard),
+  transition:
+    width var(--duration-fast) var(--easing-standard),
     border-color var(--duration-fast) var(--easing-standard),
     box-shadow var(--duration-normal) var(--easing-standard),
     transform var(--duration-fast) var(--easing-standard);

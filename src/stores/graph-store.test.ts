@@ -72,7 +72,10 @@ describe("graph editing", () => {
     useGraphStore.getState().setSelectedNodes(["b"], "add");
 
     expect(
-      useGraphStore.getState().nodes.filter((node) => node.selected).map((node) => node.id),
+      useGraphStore
+        .getState()
+        .nodes.filter((node) => node.selected)
+        .map((node) => node.id),
     ).toEqual(["a", "b"]);
 
     useGraphStore.getState().setSelectedNodes(["a"], "toggle");
@@ -98,15 +101,15 @@ describe("graph editing", () => {
     useGraphStore.getState().updateNode("b", { label: "Changed" });
     useGraphStore.getState().undo();
 
-    expect(
-      useGraphStore.getState().nodes.find((node) => node.id === "b")?.data.label,
-    ).toBe("Topic B");
+    expect(useGraphStore.getState().nodes.find((node) => node.id === "b")?.data.label).toBe(
+      "Topic B",
+    );
 
     useGraphStore.getState().redo();
 
-    expect(
-      useGraphStore.getState().nodes.find((node) => node.id === "b")?.data.label,
-    ).toBe("Changed");
+    expect(useGraphStore.getState().nodes.find((node) => node.id === "b")?.data.label).toBe(
+      "Changed",
+    );
     expect(useGraphStore.getState().documentRevision).toBe(3);
   });
 
@@ -125,8 +128,8 @@ describe("graph editing", () => {
     expect(useGraphStore.getState().documentRevision).toBe(1);
 
     useGraphStore.getState().undo();
-    expect(
-      useGraphStore.getState().nodes.find((node) => node.id === "b")?.data.label,
-    ).toBe("Topic B");
+    expect(useGraphStore.getState().nodes.find((node) => node.id === "b")?.data.label).toBe(
+      "Topic B",
+    );
   });
 });

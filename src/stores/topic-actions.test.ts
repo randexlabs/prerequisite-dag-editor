@@ -20,9 +20,7 @@ const nodes: LearningNode[] = [
   },
 ];
 
-const edges: PrerequisiteEdge[] = [
-  { id: "a-b", source: "a", target: "b", selected: false },
-];
+const edges: PrerequisiteEdge[] = [{ id: "a-b", source: "a", target: "b", selected: false }];
 
 describe("topic actions", () => {
   beforeEach(() => {
