@@ -16,20 +16,24 @@ import {
 
 const STORAGE_KEY = "prereqgraph-document-v1";
 const HISTORY_LIMIT = 100;
+const AUTOSAVE_DELAY_MS = 180;
 
 const initialNodes: LearningNode[] = [
   {
     id: "fundamentals",
+    type: "topic",
     position: { x: 80, y: 160 },
     data: { label: "Fundamentals", status: "mastered" },
   },
   {
     id: "intermediate",
+    type: "topic",
     position: { x: 380, y: 80 },
     data: { label: "Intermediate topic", status: "learning" },
   },
   {
     id: "goal",
+    type: "topic",
     position: { x: 680, y: 160 },
     data: { label: "Learning goal", status: "unknown" },
   },
@@ -59,6 +63,7 @@ type GraphStore = {
   past: GraphSnapshot[];
   future: GraphSnapshot[];
   historyTransaction: GraphSnapshot | null;
+  documentRevision: number;
   onNodesChange: (changes: NodeChange<LearningNode>[]) => void;
   onEdgesChange: (changes: EdgeChange<PrerequisiteEdge>[]) => void;
   connect: (connection: Connection) => void;
@@ -78,6 +83,7 @@ type GraphStore = {
 function durableNode(node: LearningNode): LearningNode {
   return {
     ...structuredClone(node),
+    type: "topic",
     selected: false,
     dragging: false,
   };
@@ -137,6 +143,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   past: [],
   future: [],
   historyTransaction: null,
+  documentRevision: 0,
 
   onNodesChange: (changes) =>
     set((state) => {
@@ -146,6 +153,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       const hasDurableChange = changes.some(
         (change) => change.type === "position" || change.type === "remove",
       );
+      const commitsImmediately = hasDurableChange && !state.historyTransaction;
       const nextNodes = applyNodeChanges(changes, state.nodes);
       const nextEdges =
         removedIds.size === 0
@@ -155,7 +163,10 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
             );
 
       return {
-        ...(hasDurableChange && !state.historyTransaction ? historyState(state) : {}),
+        ...(commitsImmediately ? historyState(state) : {}),
+        documentRevision: commitsImmediately
+          ? state.documentRevision + 1
+          : state.documentRevision,
         nodes: nextNodes,
         edges: nextEdges,
       };
@@ -166,6 +177,9 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       const hasDurableChange = changes.some((change) => change.type === "remove");
       return {
         ...(hasDurableChange ? historyState(state) : {}),
+        documentRevision: hasDurableChange
+          ? state.documentRevision + 1
+          : state.documentRevision,
         edges: applyEdgeChanges(changes, state.edges),
       };
     }),
@@ -180,6 +194,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
 
     set((state) => ({
       ...historyState(state),
+      documentRevision: state.documentRevision + 1,
       edges: addEdge(
         {
           ...connection,
@@ -197,10 +212,12 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
 
     set((state) => ({
       ...historyState(state),
+      documentRevision: state.documentRevision + 1,
       nodes: [
         ...state.nodes.map((node) => ({ ...node, selected: false })),
         {
           id,
+          type: "topic",
           position: {
             x: 220 + state.nodes.length * 28,
             y: 220 + (state.nodes.length % 4) * 42,
@@ -232,8 +249,13 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
         return state;
       }
 
+      const commitsImmediately = !state.historyTransaction;
+
       return {
-        ...(!state.historyTransaction ? historyState(state) : {}),
+        ...(commitsImmediately ? historyState(state) : {}),
+        documentRevision: commitsImmediately
+          ? state.documentRevision + 1
+          : state.documentRevision,
         nodes: state.nodes.map((node) =>
           node.id === id
             ? {
@@ -255,6 +277,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
 
       return {
         ...historyState(state),
+        documentRevision: state.documentRevision + 1,
         nodes: state.nodes.filter((node) => node.id !== id),
         edges: state.edges.filter((edge) => edge.source !== id && edge.target !== id),
       };
@@ -273,6 +296,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
 
       return {
         ...historyState(state),
+        documentRevision: state.documentRevision + 1,
         nodes: state.nodes.filter((node) => !selectedNodeIds.has(node.id)),
         edges: state.edges.filter(
           (edge) =>
@@ -330,6 +354,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
         past: [...state.past, state.historyTransaction].slice(-HISTORY_LIMIT),
         future: [],
         historyTransaction: null,
+        documentRevision: state.documentRevision + 1,
       };
     }),
 
@@ -344,6 +369,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
         past: state.past.slice(0, -1),
         future: [...state.future, createSnapshot(state.nodes, state.edges)].slice(-HISTORY_LIMIT),
         historyTransaction: null,
+        documentRevision: state.documentRevision + 1,
         cycleMessage: null,
       };
     }),
@@ -359,6 +385,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
         past: [...state.past, createSnapshot(state.nodes, state.edges)].slice(-HISTORY_LIMIT),
         future: state.future.slice(0, -1),
         historyTransaction: null,
+        documentRevision: state.documentRevision + 1,
         cycleMessage: null,
       };
     }),
@@ -367,12 +394,45 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
 }));
 
 if (typeof window !== "undefined") {
-  useGraphStore.subscribe((state) => {
-    const document: PersistedDocument = {
+  let persistenceTimer: number | null = null;
+  let observedRevision = useGraphStore.getState().documentRevision;
+  let lastPersistedDocument = JSON.stringify({
+    version: 1,
+    ...createSnapshot(loadedDocument.nodes, loadedDocument.edges),
+  } satisfies PersistedDocument);
+
+  const flushDocument = () => {
+    if (persistenceTimer !== null) {
+      window.clearTimeout(persistenceTimer);
+      persistenceTimer = null;
+    }
+
+    const state = useGraphStore.getState();
+    const serialized = JSON.stringify({
       version: 1,
       ...createSnapshot(state.nodes, state.edges),
-    };
+    } satisfies PersistedDocument);
 
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
+    if (serialized === lastPersistedDocument) return;
+
+    try {
+      window.localStorage.setItem(STORAGE_KEY, serialized);
+      lastPersistedDocument = serialized;
+    } catch {
+      // Keep the in-memory document usable when storage is unavailable or full.
+    }
+  };
+
+  useGraphStore.subscribe((state) => {
+    if (state.documentRevision === observedRevision) return;
+    observedRevision = state.documentRevision;
+
+    if (persistenceTimer !== null) {
+      window.clearTimeout(persistenceTimer);
+    }
+
+    persistenceTimer = window.setTimeout(flushDocument, AUTOSAVE_DELAY_MS);
   });
+
+  window.addEventListener("beforeunload", flushDocument);
 }
