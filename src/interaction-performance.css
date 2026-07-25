@@ -4,6 +4,10 @@
   will-change: transform, width, height;
 }
 
+.react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
 .app-shell.is-box-selecting .topic-node-card,
 .app-shell.is-box-selecting .topic-node-card:hover,
 .app-shell.is-box-selecting .topic-node-card.is-selected {
