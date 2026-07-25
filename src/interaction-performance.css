@@ -17,6 +17,15 @@
   cursor: grabbing;
 }
 
+.topic-browser {
+  top: var(--space-3);
+  bottom: var(--space-3);
+}
+
+.canvas-minimap {
+  bottom: var(--space-3);
+}
+
 .topic-node-card {
   min-width: 218px;
   max-width: 420px;
