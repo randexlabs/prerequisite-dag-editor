@@ -1,0 +1,99 @@
+name: Repository cleanup
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repository-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.17.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            libayatana-appindicator3-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            patchelf
+
+      - name: Install dependencies and refresh lockfile
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install Rust components
+        run: rustup component add clippy rustfmt
+
+      - name: Generate Tauri icons
+        run: pnpm icons
+
+      - name: Apply web formatting and safe lint fixes
+        run: |
+          pnpm format
+          pnpm lint:fix
+          pnpm format
+
+      - name: Apply Rust formatting
+        run: pnpm rust:fmt
+
+      - name: Commit mechanical cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          if git diff --cached --quiet; then
+            echo "Repository already formatted."
+          else
+            git commit -m "style: format repository and refresh lockfiles"
+            git push
+          fi
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Run ESLint
+        run: pnpm lint
+
+      - name: Run web tests
+        run: pnpm test
+
+      - name: Build web application
+        run: pnpm build
+
+      - name: Check Rust formatting
+        run: pnpm rust:fmt:check
+
+      - name: Run Clippy
+        run: pnpm rust:clippy
+
+      - name: Run Rust tests
+        run: pnpm rust:test
