@@ -41,51 +41,39 @@ Run the desktop app:
 pnpm tauri dev
 ```
 
-Validate the full project:
+Validate the application:
 
 ```bash
 pnpm check
 ```
 
-The build includes `pnpm design:check`. It rejects raw hexadecimal, RGB, or HSL colors outside `src/theme.css`; components must use semantic theme tokens.
-
-Audit all dependencies or only production dependencies:
+Or run the checks separately:
 
 ```bash
+pnpm design:check
+pnpm test
+pnpm build
 pnpm audit
 pnpm audit:prod
 ```
 
 Do not run `npm audit fix --force`; review and upgrade the affected direct dependency instead.
 
-## Canvas workspace
-
-The interface is canvas-first:
-
-- the graph occupies the complete application window;
-- global tools live in the floating top toolbar;
-- the topic browser can be collapsed from the brand control;
-- selecting a topic opens its contextual inspector on the right;
-- light and dark themes use the same semantic color roles;
-- the minimap is optional and starts hidden.
-
-Keyboard shortcuts:
-
-- `N`: create and select a topic;
-- `F`: fit the graph to the viewport;
-- `Delete` or `Backspace`: delete the selected topic when no text field is focused;
-- `Escape`: clear the current selection.
-
-The design rules and token contract are documented in [`docs/design-system.md`](docs/design-system.md).
-
 ## Topic operations
 
-- **Create:** use the plus button in the toolbar or topic browser.
-- **Read/select:** click a topic in the browser or directly on the canvas.
-- **Update/rename:** edit its name or mastery status in the inspector and choose **Save changes**.
-- **Delete:** use **Delete** in the inspector, or the keyboard shortcut.
+- **Create:** use **Add topic** or press `N`.
+- **Select:** click a topic. Drag an empty area of the canvas to select multiple topics.
+- **Add to selection:** hold `Ctrl`/`Cmd` while clicking topics.
+- **Rename:** click the title inside a topic and type. `Enter` commits and `Escape` cancels.
+- **Change mastery:** click the status pill inside a topic and choose another status.
+- **Delete:** select one or more topics or edges and press `Delete`/`Backspace`, or use the trash button.
+- **Undo:** press `Ctrl`/`Cmd+Z` or use the back button.
+- **Redo:** press `Ctrl`/`Cmd+Shift+Z`, `Ctrl+Y`, or use the forward button.
+- **Clear selection:** press `Escape`.
 
-Deleting a topic also deletes every incoming and outgoing connection attached to it.
+Changes are autosaved locally. There is no explicit save button. Selection is treated as temporary UI state and is not written into the document history.
+
+Deleting a topic also deletes every incoming and outgoing connection attached to it. A single undo step restores the complete deletion.
 
 ## Direction of edges
 
@@ -96,3 +84,13 @@ prerequisite -> dependent topic
 ```
 
 Connections that would create a cycle are rejected before they are added.
+
+## Design system
+
+All concrete colors live in `src/theme.css`. Components must use semantic tokens such as `--color-surface`, `--color-text`, and `--color-accent`.
+
+```bash
+pnpm design:check
+```
+
+This check fails when raw hexadecimal, RGB, or HSL colors are added outside the theme file. See `docs/design-system.md` for interaction, spacing, accessibility, and component rules.
