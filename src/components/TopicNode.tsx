@@ -1,8 +1,17 @@
-import { memo, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { ChevronDown } from "lucide-react";
 import type { LearningNode, MasteryStatus } from "../domain/graph";
 import { useGraphStore } from "../stores/graph-store";
+import { updateTopicTitle } from "../stores/topic-actions";
+import { getTopicNodeWidth } from "./topic-layout";
 import { masteryStatuses, statusMeta } from "./status-meta";
 
 export const TopicNode = memo(function TopicNode({
@@ -20,7 +29,7 @@ export const TopicNode = memo(function TopicNode({
   const [draft, setDraft] = useState(data.label);
   const originalTitle = useRef(data.label);
   const skipBlurCommit = useRef(false);
-  const titleInputRef = useRef<HTMLInputElement>(null);
+  const titleInputRef = useRef<HTMLTextAreaElement>(null);
   const status = statusMeta[data.status];
   const StatusIcon = status.icon;
 
@@ -33,6 +42,14 @@ export const TopicNode = memo(function TopicNode({
     titleInputRef.current?.focus();
     titleInputRef.current?.select();
   }, [editingTitle]);
+
+  useLayoutEffect(() => {
+    const input = titleInputRef.current;
+    if (!editingTitle || !input) return;
+
+    input.style.height = "0px";
+    input.style.height = `${input.scrollHeight}px`;
+  }, [draft, editingTitle]);
 
   const selectOnlyThisNode = () => setSelectedNodes([id], "replace");
 
@@ -54,20 +71,20 @@ export const TopicNode = memo(function TopicNode({
 
     const nextTitle = draft.trim() || originalTitle.current;
     setDraft(nextTitle);
-    updateNode(id, { label: nextTitle });
+    updateTopicTitle(id, nextTitle);
     endHistoryTransaction();
     setEditingTitle(false);
   };
 
   const cancelTitleEditing = () => {
     skipBlurCommit.current = true;
-    updateNode(id, { label: originalTitle.current });
+    updateTopicTitle(id, originalTitle.current);
     setDraft(originalTitle.current);
     endHistoryTransaction();
     setEditingTitle(false);
   };
 
-  const handleTitleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const handleTitleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     event.stopPropagation();
 
     if (event.key === "Enter") {
@@ -90,6 +107,7 @@ export const TopicNode = memo(function TopicNode({
   return (
     <article
       className={`topic-node-card topic-node-${data.status}${selected ? " is-selected" : ""}`}
+      style={{ width: getTopicNodeWidth(data.label) }}
       aria-label={`${data.label}, ${status.label}`}
     >
       <Handle
@@ -101,17 +119,18 @@ export const TopicNode = memo(function TopicNode({
 
       <div className="topic-node-copy">
         {editingTitle ? (
-          <input
+          <textarea
             ref={titleInputRef}
             className="topic-title-input nodrag nopan"
             value={draft}
+            rows={1}
             maxLength={80}
             aria-label="Topic title"
             onPointerDown={(event) => event.stopPropagation()}
             onChange={(event) => {
               const value = event.target.value;
               setDraft(value);
-              if (value.trim()) updateNode(id, { label: value });
+              if (value.trim()) updateTopicTitle(id, value);
             }}
             onBlur={finishTitleEditing}
             onKeyDown={handleTitleKeyDown}
