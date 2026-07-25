@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { ChevronDown } from "lucide-react";
 import type { LearningNode, MasteryStatus } from "../domain/graph";
 import { useGraphStore } from "../stores/graph-store";
 import { masteryStatuses, statusMeta } from "./status-meta";
@@ -13,6 +14,7 @@ export function TopicNode({ id, data, selected, isConnectable }: NodeProps<Learn
   const [statusOpen, setStatusOpen] = useState(false);
   const [draft, setDraft] = useState(data.label);
   const originalTitle = useRef(data.label);
+  const skipBlurCommit = useRef(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const status = statusMeta[data.status];
   const StatusIcon = status.icon;
@@ -32,6 +34,7 @@ export function TopicNode({ id, data, selected, isConnectable }: NodeProps<Learn
   const startTitleEditing = () => {
     selectOnlyThisNode();
     originalTitle.current = data.label;
+    skipBlurCommit.current = false;
     setDraft(data.label);
     beginHistoryTransaction();
     setEditingTitle(true);
@@ -39,6 +42,11 @@ export function TopicNode({ id, data, selected, isConnectable }: NodeProps<Learn
   };
 
   const finishTitleEditing = () => {
+    if (skipBlurCommit.current) {
+      skipBlurCommit.current = false;
+      return;
+    }
+
     const nextTitle = draft.trim() || originalTitle.current;
     setDraft(nextTitle);
     updateNode(id, { label: nextTitle });
@@ -47,6 +55,7 @@ export function TopicNode({ id, data, selected, isConnectable }: NodeProps<Learn
   };
 
   const cancelTitleEditing = () => {
+    skipBlurCommit.current = true;
     updateNode(id, { label: originalTitle.current });
     setDraft(originalTitle.current);
     endHistoryTransaction();
@@ -117,7 +126,7 @@ export function TopicNode({ id, data, selected, isConnectable }: NodeProps<Learn
         <div
           className="topic-status-control nodrag nopan"
           onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as globalThis.Node | null)) {
+            if (!event.currentTarget.contains(event.relatedTarget as HTMLElement | null)) {
               setStatusOpen(false);
             }
           }}
@@ -131,12 +140,11 @@ export function TopicNode({ id, data, selected, isConnectable }: NodeProps<Learn
             onClick={() => {
               selectOnlyThisNode();
               setStatusOpen((open) => !open);
-              setEditingTitle(false);
             }}
           >
             <StatusIcon size={13} strokeWidth={2.3} aria-hidden="true" />
             <span>{status.label}</span>
-            <span className="status-chevron" aria-hidden="true">⌄</span>
+            <ChevronDown className="status-chevron" size={13} aria-hidden="true" />
           </button>
 
           {statusOpen ? (
