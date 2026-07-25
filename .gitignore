@@ -7,3 +7,5 @@ package-lock.json
 yarn.lock
 src-tauri/target/
 src-tauri/icons/
+.ci/
+src-tauri/gen/
