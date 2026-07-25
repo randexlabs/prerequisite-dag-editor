@@ -2,24 +2,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Background,
   BackgroundVariant,
-  Controls,
   MarkerType,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
   SelectionMode,
-  useReactFlow,
   type DefaultEdgeOptions,
 } from "@xyflow/react";
 import {
   ListTree,
   Map,
-  Maximize2,
   Moon,
   MousePointer2,
   Network,
-  PanelLeftClose,
-  PanelLeftOpen,
   Plus,
   Redo2,
   Search,
@@ -30,12 +25,14 @@ import {
 } from "lucide-react";
 import { TopicNode } from "./components/TopicNode";
 import { decorateEdgesForHighlight } from "./components/graph-presentation";
+import { getWorkspaceShortcut } from "./components/keyboard-shortcuts";
 import { statusMeta } from "./components/status-meta";
 import { getGraphNeighborhood } from "./domain/graph";
 import { useGraphStore } from "./stores/graph-store";
 
 const nodeTypes = { topic: TopicNode };
 const fitViewOptions = { padding: 0.24 } as const;
+const proOptions = { hideAttribution: true } as const;
 const connectionLineStyle = {
   stroke: "var(--color-accent)",
   strokeWidth: 2,
@@ -79,9 +76,7 @@ function Workspace() {
     redo,
     clearCycleMessage,
   } = useGraphStore();
-  const { fitView } = useReactFlow();
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
-  const [browserOpen, setBrowserOpen] = useState(true);
   const [minimapOpen, setMinimapOpen] = useState(false);
   const [isBoxSelecting, setIsBoxSelecting] = useState(false);
   const [query, setQuery] = useState("");
@@ -129,57 +124,45 @@ function Workspace() {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      const isEditing = target?.matches("input, textarea, select, [contenteditable='true']");
-      const key = event.key.toLocaleLowerCase();
-      const modifier = event.metaKey || event.ctrlKey;
+      const action = getWorkspaceShortcut(event, {
+        isEditing: Boolean(
+          target?.matches("input, textarea, select, [contenteditable='true']"),
+        ),
+        hasSelection: selectedElementCount > 0,
+      });
 
-      if (!isEditing && modifier && key === "z") {
-        event.preventDefault();
-        if (event.shiftKey) redo();
-        else undo();
-        return;
-      }
-
-      if (!isEditing && modifier && key === "y") {
-        event.preventDefault();
-        redo();
-        return;
-      }
-
-      if (isEditing) return;
-
-      if (event.key === "Escape") {
-        clearSelection();
-        return;
-      }
-
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedElementCount > 0) {
-        event.preventDefault();
-        deleteSelected();
-        return;
-      }
-
-      if (modifier || event.altKey) return;
-
-      if (key === "n") {
-        event.preventDefault();
-        addNode();
-        setBrowserOpen(true);
-      }
-
-      if (key === "f") {
-        event.preventDefault();
-        void fitView({ padding: 0.24, duration: 240 });
+      switch (action) {
+        case "undo":
+          event.preventDefault();
+          undo();
+          return;
+        case "redo":
+          event.preventDefault();
+          redo();
+          return;
+        case "clear-selection":
+          event.preventDefault();
+          clearSelection();
+          return;
+        case "delete-selection":
+          event.preventDefault();
+          deleteSelected();
+          return;
+        case "add-topic":
+          event.preventDefault();
+          addNode();
+          return;
+        default:
+          return;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [addNode, clearSelection, deleteSelected, fitView, redo, selectedElementCount, undo]);
+  }, [addNode, clearSelection, deleteSelected, redo, selectedElementCount, undo]);
 
   const addTopic = () => {
     addNode();
-    setBrowserOpen(true);
   };
 
   return (
@@ -203,7 +186,7 @@ function Workspace() {
           selectionOnDrag
           selectionMode={SelectionMode.Full}
           panOnDrag={[1]}
-          panActivationKeyCode="Space"
+          panActivationKeyCode={null}
           panOnScroll
           autoPanOnSelection={false}
           elevateNodesOnSelect={false}
@@ -213,6 +196,7 @@ function Workspace() {
           maxZoom={2.2}
           fitView
           fitViewOptions={fitViewOptions}
+          proOptions={proOptions}
           connectionLineStyle={connectionLineStyle}
           defaultEdgeOptions={defaultEdgeOptions}
         >
@@ -222,7 +206,6 @@ function Workspace() {
             size={1.2}
             color="var(--color-canvas-grid)"
           />
-          <Controls className="canvas-controls" showInteractive={false} />
           {minimapOpen ? (
             <MiniMap
               className="canvas-minimap"
@@ -247,25 +230,6 @@ function Workspace() {
           </div>
         ) : null}
       </section>
-
-      <div className="brand-pill floating-surface">
-        <button
-          type="button"
-          className="icon-button"
-          onClick={() => setBrowserOpen((open) => !open)}
-          aria-label={browserOpen ? "Hide topic browser" : "Show topic browser"}
-          title={browserOpen ? "Hide topics" : "Show topics"}
-        >
-          {browserOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
-        </button>
-        <div className="brand-mark">
-          <Network size={18} />
-        </div>
-        <div className="brand-copy">
-          <strong>PrereqGraph</strong>
-          <span>Autosaved · {nodes.length} topics</span>
-        </div>
-      </div>
 
       <nav className="tool-dock floating-surface" aria-label="Canvas tools">
         <button
@@ -310,16 +274,6 @@ function Workspace() {
         </button>
         <button
           type="button"
-          className="tool-button"
-          onClick={() => void fitView({ padding: 0.24, duration: 240 })}
-          aria-label="Fit graph to view"
-          title="Fit to view (F)"
-        >
-          <Maximize2 size={18} />
-          <kbd>F</kbd>
-        </button>
-        <button
-          type="button"
           className={`tool-button${minimapOpen ? " is-active" : ""}`}
           onClick={() => setMinimapOpen((open) => !open)}
           aria-pressed={minimapOpen}
@@ -354,84 +308,74 @@ function Workspace() {
         </button>
       </nav>
 
-      {browserOpen ? (
-        <aside className="floating-panel topic-browser" aria-label="Topic browser">
-          <header className="panel-header">
-            <div>
-              <p className="eyebrow">Workspace</p>
-              <h2>Topics</h2>
-            </div>
-            <button type="button" className="icon-button" onClick={addTopic} aria-label="Add topic">
-              <Plus size={17} />
-            </button>
-          </header>
-
-          <label className="search-field">
-            <Search size={16} aria-hidden="true" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search topics"
-              aria-label="Search topics"
-            />
-            {query ? (
-              <button type="button" onClick={() => setQuery("")} aria-label="Clear search">
-                <X size={14} />
-              </button>
-            ) : null}
-          </label>
-
-          <div className="topic-list" role="list">
-            {filteredNodes.map((node) => {
-              const item = statusMeta[node.data.status];
-              const StatusIcon = item.icon;
-              const isAdjacent = !node.selected && adjacentNodeIds.has(node.id);
-
-              return (
-                <button
-                  key={node.id}
-                  type="button"
-                  className={mergeClassNames(
-                    "topic-list-item",
-                    node.selected && "is-selected",
-                    isAdjacent && "is-adjacent",
-                  )}
-                  onClick={(event) =>
-                    setSelectedNodes(
-                      [node.id],
-                      event.metaKey || event.ctrlKey || event.shiftKey ? "toggle" : "replace",
-                    )
-                  }
-                  role="listitem"
-                >
-                  <span className={`status-icon status-${node.data.status}`}>
-                    <StatusIcon size={15} aria-hidden="true" />
-                  </span>
-                  <span className="topic-list-copy">
-                    <strong>{node.data.label}</strong>
-                    <small>{item.label}</small>
-                  </span>
-                </button>
-              );
-            })}
-
-            {filteredNodes.length === 0 ? (
-              <div className="empty-list">
-                <ListTree size={20} />
-                <span>No matching topics</span>
-              </div>
-            ) : null}
+      <aside className="floating-panel topic-browser" aria-label="Topic browser">
+        <header className="panel-header">
+          <div>
+            <p className="eyebrow">Workspace</p>
+            <h2>Topics</h2>
           </div>
-        </aside>
-      ) : null}
+          <button type="button" className="icon-button" onClick={addTopic} aria-label="Add topic">
+            <Plus size={17} />
+          </button>
+        </header>
 
-      <div className="canvas-hint floating-surface">
-        <span>Left drag to select</span>
-        <span>Middle drag to pan</span>
-        <span>
-          <kbd>Space</kbd> + drag to pan
-        </span>
-      </div>
+        <label className="search-field">
+          <Search size={16} aria-hidden="true" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search topics"
+            aria-label="Search topics"
+          />
+          {query ? (
+            <button type="button" onClick={() => setQuery("")} aria-label="Clear search">
+              <X size={14} />
+            </button>
+          ) : null}
+        </label>
+
+        <div className="topic-list" role="list">
+          {filteredNodes.map((node) => {
+            const item = statusMeta[node.data.status];
+            const StatusIcon = item.icon;
+            const isAdjacent = !node.selected && adjacentNodeIds.has(node.id);
+
+            return (
+              <button
+                key={node.id}
+                type="button"
+                className={mergeClassNames(
+                  "topic-list-item",
+                  node.selected && "is-selected",
+                  isAdjacent && "is-adjacent",
+                )}
+                onClick={(event) =>
+                  setSelectedNodes(
+                    [node.id],
+                    event.metaKey || event.ctrlKey || event.shiftKey ? "toggle" : "replace",
+                  )
+                }
+                role="listitem"
+              >
+                <span className={`status-icon status-${node.data.status}`}>
+                  <StatusIcon size={15} aria-hidden="true" />
+                </span>
+                <span className="topic-list-copy">
+                  <strong>{node.data.label}</strong>
+                  <small>{item.label}</small>
+                </span>
+              </button>
+            );
+          })}
+
+          {filteredNodes.length === 0 ? (
+            <div className="empty-list">
+              <ListTree size={20} />
+              <span>No matching topics</span>
+            </div>
+          ) : null}
+        </div>
+      </aside>
 
       {cycleMessage ? (
         <button className="toast" type="button" onClick={clearCycleMessage}>
