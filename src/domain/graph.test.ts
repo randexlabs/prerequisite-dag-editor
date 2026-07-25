@@ -24,11 +24,20 @@ describe("wouldCreateCycle", () => {
 });
 
 describe("getGraphNeighborhood", () => {
-  it("returns every recursively connected predecessor and successor", () => {
+  it("returns only recursive descendants and their connecting edges", () => {
     const neighborhood = getGraphNeighborhood(edges, ["b"]);
 
-    expect([...neighborhood.nodeIds].sort()).toEqual(["a", "c", "d", "e"]);
-    expect([...neighborhood.edgeIds].sort()).toEqual(["a-b", "b-c", "c-e", "d-b"]);
+    expect([...neighborhood.nodeIds].sort()).toEqual(["c", "e"]);
+    expect([...neighborhood.edgeIds].sort()).toEqual(["b-c", "c-e"]);
+  });
+
+  it("does not highlight recursive predecessors", () => {
+    const neighborhood = getGraphNeighborhood(edges, ["b"]);
+
+    expect(neighborhood.nodeIds.has("a")).toBe(false);
+    expect(neighborhood.nodeIds.has("d")).toBe(false);
+    expect(neighborhood.edgeIds.has("a-b")).toBe(false);
+    expect(neighborhood.edgeIds.has("d-b")).toBe(false);
   });
 
   it("does not cross into disconnected graph components", () => {
@@ -39,10 +48,10 @@ describe("getGraphNeighborhood", () => {
     expect(neighborhood.edgeIds.has("x-y")).toBe(false);
   });
 
-  it("does not return selected nodes as their own neighbors", () => {
+  it("does not return selected nodes as their own descendants", () => {
     const neighborhood = getGraphNeighborhood(edges, ["a", "b"]);
 
-    expect([...neighborhood.nodeIds].sort()).toEqual(["c", "d", "e"]);
-    expect([...neighborhood.edgeIds].sort()).toEqual(["a-b", "b-c", "c-e", "d-b"]);
+    expect([...neighborhood.nodeIds].sort()).toEqual(["c", "e"]);
+    expect([...neighborhood.edgeIds].sort()).toEqual(["a-b", "b-c", "c-e"]);
   });
 });
