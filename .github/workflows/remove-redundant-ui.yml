@@ -1,0 +1,336 @@
+name: Remove redundant canvas UI once
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: remove-redundant-canvas-ui-once
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.17.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Remove redundant UI and mechanics
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(source: str, old: str, new: str, label: str) -> str:
+              count = source.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{label}: expected one match, found {count}")
+              return source.replace(old, new, 1)
+
+          app_path = Path("src/App.tsx")
+          app = app_path.read_text(encoding="utf-8")
+
+          for line in (
+              "  Controls,\n",
+              "  useReactFlow,\n",
+              "  Maximize2,\n",
+              "  PanelLeftClose,\n",
+              "  PanelLeftOpen,\n",
+          ):
+              app = replace_once(app, line, "", f"remove import {line.strip()}")
+
+          app = replace_once(
+              app,
+              'import { decorateEdgesForHighlight } from "./components/graph-presentation";\n',
+              'import { decorateEdgesForHighlight } from "./components/graph-presentation";\n'
+              'import { getWorkspaceShortcut } from "./components/keyboard-shortcuts";\n',
+              "workspace shortcut import",
+          )
+          app = replace_once(
+              app,
+              "const fitViewOptions = { padding: 0.24 } as const;\n",
+              "const fitViewOptions = { padding: 0.24 } as const;\n"
+              "const proOptions = { hideAttribution: true } as const;\n",
+              "React Flow pro options",
+          )
+          app = replace_once(app, "  const { fitView } = useReactFlow();\n", "", "fitView hook")
+          app = replace_once(
+              app,
+              "  const [browserOpen, setBrowserOpen] = useState(true);\n",
+              "",
+              "browser visibility state",
+          )
+
+          shortcut_effect = re.compile(
+              r"  useEffect\(\(\) => \{\n"
+              r"    const handleKeyDown = \(event: KeyboardEvent\) => \{.*?"
+              r"  \}, \[addNode, clearSelection, deleteSelected, fitView, redo, selectedElementCount, undo\]\);\n",
+              re.DOTALL,
+          )
+          replacement_effect = '''  useEffect(() => {
+            const handleKeyDown = (event: KeyboardEvent) => {
+              const target = event.target as HTMLElement | null;
+              const action = getWorkspaceShortcut(event, {
+                isEditing: Boolean(
+                  target?.matches("input, textarea, select, [contenteditable='true']"),
+                ),
+                hasSelection: selectedElementCount > 0,
+              });
+
+              switch (action) {
+                case "undo":
+                  event.preventDefault();
+                  undo();
+                  return;
+                case "redo":
+                  event.preventDefault();
+                  redo();
+                  return;
+                case "clear-selection":
+                  event.preventDefault();
+                  clearSelection();
+                  return;
+                case "delete-selection":
+                  event.preventDefault();
+                  deleteSelected();
+                  return;
+                case "add-topic":
+                  event.preventDefault();
+                  addNode();
+                  return;
+                default:
+                  return;
+              }
+            };
+
+            window.addEventListener("keydown", handleKeyDown);
+            return () => window.removeEventListener("keydown", handleKeyDown);
+          }, [addNode, clearSelection, deleteSelected, redo, selectedElementCount, undo]);
+'''
+          app, count = shortcut_effect.subn(replacement_effect, app, count=1)
+          if count != 1:
+              raise RuntimeError(f"keyboard effect: expected one match, found {count}")
+
+          app = replace_once(
+              app,
+              '''  const addTopic = () => {
+            addNode();
+            setBrowserOpen(true);
+          };
+''',
+              '''  const addTopic = () => {
+            addNode();
+          };
+''',
+              "add topic action",
+          )
+          app = replace_once(
+              app,
+              '          panActivationKeyCode="Space"\n',
+              '          panActivationKeyCode={null}\n',
+              "keyboard pan",
+          )
+          app = replace_once(
+              app,
+              "          fitViewOptions={fitViewOptions}\n",
+              "          fitViewOptions={fitViewOptions}\n          proOptions={proOptions}\n",
+              "attribution option",
+          )
+          app = replace_once(
+              app,
+              '          <Controls className="canvas-controls" showInteractive={false} />\n',
+              "",
+              "canvas controls",
+          )
+
+          brand = '''      <div className="brand-pill floating-surface">
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => setBrowserOpen((open) => !open)}
+              aria-label={browserOpen ? "Hide topic browser" : "Show topic browser"}
+              title={browserOpen ? "Hide topics" : "Show topics"}
+            >
+              {browserOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+            </button>
+            <div className="brand-mark">
+              <Network size={18} />
+            </div>
+            <div className="brand-copy">
+              <strong>PrereqGraph</strong>
+              <span>Autosaved · {nodes.length} topics</span>
+            </div>
+          </div>
+
+'''
+          app = replace_once(app, brand, "", "brand pill")
+
+          fit_button = '''        <button
+              type="button"
+              className="tool-button"
+              onClick={() => void fitView({ padding: 0.24, duration: 240 })}
+              aria-label="Fit graph to view"
+              title="Fit to view (F)"
+            >
+              <Maximize2 size={18} />
+              <kbd>F</kbd>
+            </button>
+'''
+          app = replace_once(app, fit_button, "", "fit view button")
+
+          app = replace_once(
+              app,
+              '      {browserOpen ? (\n        <aside className="floating-panel topic-browser" aria-label="Topic browser">',
+              '      <aside className="floating-panel topic-browser" aria-label="Topic browser">',
+              "always visible topic browser",
+          )
+          app = replace_once(
+              app,
+              "        </aside>\n      ) : null}\n",
+              "      </aside>\n",
+              "topic browser conditional close",
+          )
+
+          hint = '''      <div className="canvas-hint floating-surface">
+            <span>Left drag to select</span>
+            <span>Middle drag to pan</span>
+            <span>
+              <kbd>Space</kbd> + drag to pan
+            </span>
+          </div>
+
+'''
+          app = replace_once(app, hint, "", "canvas hint")
+
+          forbidden_app = (
+              "brand-pill",
+              "canvas-controls",
+              "canvas-hint",
+              "Fit graph to view",
+              "useReactFlow",
+              "browserOpen",
+              "setBrowserOpen",
+              'panActivationKeyCode="Space"',
+          )
+          for token in forbidden_app:
+              if token in app:
+                  raise RuntimeError(f"App.tsx still contains {token!r}")
+
+          app_path.write_text(app, encoding="utf-8")
+
+          styles_path = Path("src/styles.css")
+          styles = styles_path.read_text(encoding="utf-8")
+
+          for declaration in (
+              "  --xy-controls-button-background-color: var(--color-surface);\n",
+              "  --xy-controls-button-background-color-hover: var(--color-surface-hover);\n",
+              "  --xy-controls-button-color: var(--color-text);\n",
+              "  --xy-controls-button-border-color: var(--color-border);\n",
+          ):
+              styles = replace_once(styles, declaration, "", "control design token")
+
+          block_patterns = (
+              r"\n\.react-flow__attribution \{.*?\n\}\n",
+              r"\n\.brand-pill \{.*?\n\}\n\n\.brand-mark \{.*?\n\}\n\n\.brand-copy \{.*?\n\}\n\n\.brand-copy strong \{.*?\n\}\n\n\.brand-copy span \{.*?\n\}\n",
+              r"\n\.canvas-controls \{.*?\n\}\n\n\.canvas-controls button \{.*?\n\}\n\n\.canvas-controls button:hover \{.*?\n\}\n\n\.canvas-controls svg \{.*?\n\}\n",
+              r"\n\.canvas-hint \{.*?\n\}\n\n\.canvas-hint span \{.*?\n\}\n",
+              r"\n@media \(max-width: 980px\) \{.*?\n\}\n",
+          )
+          for pattern in block_patterns:
+              styles, count = re.subn(pattern, "\n", styles, count=1, flags=re.DOTALL)
+              if count != 1:
+                  raise RuntimeError(f"styles block did not match: {pattern}")
+
+          styles = replace_once(styles, "  top: 76px;\n", "  top: var(--space-3);\n", "browser top")
+          styles = replace_once(styles, "  bottom: 68px;\n", "  bottom: var(--space-3);\n", "browser bottom")
+          styles = replace_once(styles, "  bottom: 64px;\n", "  bottom: var(--space-3);\n", "minimap bottom")
+          styles = replace_once(styles, "  .brand-copy,\n", "", "responsive brand selector")
+          styles = replace_once(
+              styles,
+              '''
+            .brand-pill {
+              padding-right: var(--space-1);
+            }
+''',
+              "",
+              "responsive brand block",
+          )
+          styles = replace_once(
+              styles,
+              '''
+            .canvas-controls {
+              display: none;
+            }
+''',
+              "",
+              "responsive controls block",
+          )
+
+          for token in ("brand-pill", "brand-copy", "brand-mark", "canvas-controls", "canvas-hint"):
+              if token in styles:
+                  raise RuntimeError(f"styles.css still contains {token!r}")
+
+          styles_path.write_text(styles, encoding="utf-8")
+
+          readme_path = Path("README.md")
+          readme = readme_path.read_text(encoding="utf-8")
+          readme = replace_once(
+              readme,
+              "- **Move the canvas:** drag with the middle mouse button. `Space` plus left drag remains available as an alternative.\n",
+              "- **Move the canvas:** drag with the middle mouse button.\n",
+              "README pan instructions",
+          )
+          readme_path.write_text(readme, encoding="utf-8")
+          PY
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format and validate web application
+        run: |
+          pnpm format
+          pnpm lint
+          pnpm test
+          pnpm build
+
+      - name: Delete obsolete branch
+        shell: bash
+        run: |
+          if git ls-remote --exit-code --heads origin agent/initial-project-setup >/dev/null 2>&1; then
+            git push origin --delete agent/initial-project-setup
+          fi
+
+          if git ls-remote --exit-code --heads origin agent/initial-project-setup >/dev/null 2>&1; then
+            echo "Obsolete branch still exists." >&2
+            exit 1
+          fi
+
+      - name: Commit canvas cleanup
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/styles.css README.md
+          git commit -m "refactor: remove redundant canvas chrome"
+          git push
