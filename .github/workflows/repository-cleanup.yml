@@ -27,22 +27,27 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.17.0
+      - name: Record workflow heartbeat
+        shell: bash
+        run: |
+          mkdir -p .ci
+          printf 'started from %s at %s\n' "$GITHUB_EVENT_NAME" "$(date -u +%FT%TZ)" > .ci/workflow-heartbeat.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .ci/workflow-heartbeat.txt
+          git commit -m "ci: record cleanup workflow heartbeat"
+          git push
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
+      - name: Enable pinned pnpm
+        shell: bash
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.17.0 --activate
 
       - name: Run cleanup and capture diagnostics
         shell: bash
         run: |
           set +e
-          mkdir -p .ci
           report=.ci/cleanup-report.md
           : > "$report"
 
@@ -85,8 +90,6 @@ jobs:
           run_step "Rust tests" pnpm rust:test
           run_step "Git diff summary" git diff --stat
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add --all
           git commit -m "chore: apply automated repository cleanup"
           git push
