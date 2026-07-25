@@ -17,12 +17,11 @@ jobs:
   web:
     name: Web checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -38,11 +37,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Check changed-file formatting
-        run: pnpm format:check:changed
-        env:
-          FORMAT_BASE_SHA: ${{ github.event.before }}
-          FORMAT_HEAD_SHA: ${{ github.sha }}
+      - name: Check formatting
+        run: pnpm format:check
 
       - name: Lint
         run: pnpm lint
@@ -56,6 +52,7 @@ jobs:
   rust:
     name: Rust checks
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
