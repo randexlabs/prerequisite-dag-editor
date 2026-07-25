@@ -83,7 +83,7 @@ The web job validates repository-wide formatting, ESLint, Vitest, the design-tok
 
 - **Create:** use **Add topic** or press `N`.
 - **Select:** click a topic. Drag with the left mouse button on empty canvas space to select multiple topics.
-- **Move the canvas:** drag with the middle mouse button. `Space` plus left drag remains available as an alternative.
+- **Move the canvas:** drag with the middle mouse button.
 - **Add to selection:** hold `Ctrl`/`Cmd` while clicking topics.
 - **Rename:** click the title inside a topic and type. `Enter` commits and `Escape` cancels. The card grows horizontally around its center until the maximum width, then wraps the title and grows vertically.
 - **Duplicate:** select one or more topics and press `Ctrl`/`Cmd+D`. Copies keep their title and mastery state, are offset from the originals, and do not copy connections.
