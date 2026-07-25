@@ -25,11 +25,10 @@ export function getGraphNeighborhood(
 
   if (selected.size === 0) return { nodeIds, edgeIds };
 
-  const incidentEdges = new Map<string, PrerequisiteEdge[]>();
+  const outgoingEdges = new Map<string, PrerequisiteEdge[]>();
 
   for (const edge of edges) {
-    incidentEdges.set(edge.source, [...(incidentEdges.get(edge.source) ?? []), edge]);
-    incidentEdges.set(edge.target, [...(incidentEdges.get(edge.target) ?? []), edge]);
+    outgoingEdges.set(edge.source, [...(outgoingEdges.get(edge.source) ?? []), edge]);
   }
 
   const visited = new Set(selected);
@@ -38,17 +37,16 @@ export function getGraphNeighborhood(
   while (queue.length > 0) {
     const current = queue.shift()!;
 
-    for (const edge of incidentEdges.get(current) ?? []) {
+    for (const edge of outgoingEdges.get(current) ?? []) {
       edgeIds.add(edge.id);
 
-      const adjacent = edge.source === current ? edge.target : edge.source;
-      if (visited.has(adjacent)) continue;
+      if (visited.has(edge.target)) continue;
 
-      visited.add(adjacent);
-      queue.push(adjacent);
+      visited.add(edge.target);
+      queue.push(edge.target);
 
-      if (!selected.has(adjacent)) {
-        nodeIds.add(adjacent);
+      if (!selected.has(edge.target)) {
+        nodeIds.add(edge.target);
       }
     }
   }
