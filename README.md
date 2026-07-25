@@ -57,6 +57,16 @@ pnpm audit:prod
 
 Commit `pnpm-lock.yaml` after the first successful install. Do not run `npm audit fix --force`; review and upgrade the affected direct dependency instead.
 
+## Topic operations
+
+- **Create:** use **Add topic** in the header or the plus button in the topic list.
+- **Read/select:** click a topic in the list or directly on the canvas.
+- **Update/rename:** edit its name or mastery status in the inspector and choose **Save / rename**.
+- **Delete:** use the trash button in the inspector, or press `Delete`/`Backspace` while a topic is selected and no text field is focused.
+- Press `Escape` to clear the current selection.
+
+Deleting a topic also deletes every incoming and outgoing connection attached to it.
+
 ## Direction of edges
 
 An edge always points from a prerequisite to the topic it unlocks:
