@@ -5,9 +5,11 @@ import "./theme.css";
 import "./styles.css";
 import "./interaction-performance.css";
 import { App } from "./App";
+import { GlobalShortcuts } from "./components/GlobalShortcuts";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
+    <GlobalShortcuts />
     <App />
   </StrictMode>,
 );
