@@ -2,14 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Background,
   BackgroundVariant,
+  ConnectionLineType,
   MarkerType,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
   SelectionMode,
+  type Connection,
   type DefaultEdgeOptions,
 } from "@xyflow/react";
 import {
+  ArrowRight,
+  Link2,
   ListTree,
   Map,
   Moon,
@@ -27,7 +31,8 @@ import { TopicNode } from "./components/TopicNode";
 import { decorateEdgesForHighlight } from "./components/graph-presentation";
 import { getWorkspaceShortcut } from "./components/keyboard-shortcuts";
 import { statusMeta } from "./components/status-meta";
-import { getGraphNeighborhood } from "./domain/graph";
+import { connectionIssueMeta, getConnectionIssue } from "./domain/connection";
+import { getGraphNeighborhood, type PrerequisiteEdge } from "./domain/graph";
 import { useGraphStore } from "./stores/graph-store";
 
 const nodeTypes = { topic: TopicNode };
@@ -35,7 +40,8 @@ const fitViewOptions = { padding: 0.24 } as const;
 const proOptions = { hideAttribution: true } as const;
 const connectionLineStyle = {
   stroke: "var(--color-accent)",
-  strokeWidth: 2,
+  strokeWidth: 3,
+  strokeDasharray: "7 5",
 } as const;
 const defaultEdgeOptions: DefaultEdgeOptions = {
   type: "smoothstep",
@@ -61,11 +67,17 @@ function Workspace() {
     nodes,
     edges,
     cycleMessage,
+    connectionSourceId,
+    connectionMode,
     past,
     future,
     onNodesChange,
     onEdgesChange,
     connect,
+    beginConnection,
+    connectToNode,
+    finishConnectionGesture,
+    cancelConnection,
     addNode,
     deleteSelected,
     setSelectedNodes,
@@ -84,20 +96,41 @@ function Workspace() {
   const { renderedNodes, renderedEdges, selectedNodeIds, adjacentNodeIds } = useMemo(() => {
     const selectedIds = new Set(nodes.filter((node) => node.selected).map((node) => node.id));
     const neighborhood = getGraphNeighborhood(edges, selectedIds);
+    const highlightedEdgeIds = connectionSourceId ? new Set<string>() : neighborhood.edgeIds;
 
     return {
       selectedNodeIds: selectedIds,
       adjacentNodeIds: neighborhood.nodeIds,
-      renderedNodes: nodes.map((node) => ({
-        ...node,
-        className: mergeClassNames(
-          node.className,
-          !node.selected && neighborhood.nodeIds.has(node.id) && "is-adjacent-node",
-        ),
-      })),
-      renderedEdges: decorateEdgesForHighlight(edges, neighborhood.edgeIds),
+      renderedNodes: nodes.map((node) => {
+        const isConnectionSource = node.id === connectionSourceId;
+        const connectionIssue =
+          connectionSourceId && !isConnectionSource
+            ? getConnectionIssue(edges, connectionSourceId, node.id)
+            : null;
+
+        return {
+          ...node,
+          className: mergeClassNames(
+            node.className,
+            !connectionSourceId &&
+              !node.selected &&
+              neighborhood.nodeIds.has(node.id) &&
+              "is-adjacent-node",
+            isConnectionSource && "is-connection-source",
+            connectionSourceId !== null &&
+              !isConnectionSource &&
+              connectionIssue === null &&
+              "is-connection-candidate",
+            connectionSourceId !== null &&
+              !isConnectionSource &&
+              connectionIssue !== null &&
+              "is-connection-unavailable",
+          ),
+        };
+      }),
+      renderedEdges: decorateEdgesForHighlight(edges, highlightedEdgeIds),
     };
-  }, [edges, nodes]);
+  }, [connectionSourceId, edges, nodes]);
 
   const filteredNodes = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -105,6 +138,10 @@ function Workspace() {
     return nodes.filter((node) => node.data.label.toLocaleLowerCase().includes(normalizedQuery));
   }, [nodes, query]);
 
+  const connectionSourceNode = useMemo(
+    () => nodes.find((node) => node.id === connectionSourceId) ?? null,
+    [connectionSourceId, nodes],
+  );
   const selectedNodeCount = selectedNodeIds.size;
   const selectedEdgeCount = edges.filter((edge) => edge.selected).length;
   const selectedElementCount = selectedNodeCount + selectedEdgeCount;
@@ -115,6 +152,15 @@ function Workspace() {
     (node: (typeof nodes)[number]) => `var(--color-status-${node.data.status ?? "unknown"})`,
     [],
   );
+  const isValidConnection = useCallback(
+    (connection: Connection | PrerequisiteEdge) =>
+      getConnectionIssue(edges, connection.source, connection.target) === null,
+    [edges],
+  );
+  const clearCanvasInteraction = useCallback(() => {
+    cancelConnection();
+    clearSelection();
+  }, [cancelConnection, clearSelection]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -127,6 +173,7 @@ function Workspace() {
       const action = getWorkspaceShortcut(event, {
         isEditing: Boolean(target?.matches("input, textarea, select, [contenteditable='true']")),
         hasSelection: selectedElementCount > 0,
+        hasPendingConnection: connectionSourceId !== null,
       });
 
       switch (action) {
@@ -137,6 +184,10 @@ function Workspace() {
         case "redo":
           event.preventDefault();
           redo();
+          return;
+        case "cancel-connection":
+          event.preventDefault();
+          cancelConnection();
           return;
         case "clear-selection":
           event.preventDefault();
@@ -157,14 +208,30 @@ function Workspace() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [addNode, clearSelection, deleteSelected, redo, selectedElementCount, undo]);
+  }, [
+    addNode,
+    cancelConnection,
+    clearSelection,
+    connectionSourceId,
+    deleteSelected,
+    redo,
+    selectedElementCount,
+    undo,
+  ]);
 
   const addTopic = () => {
     addNode();
   };
 
   return (
-    <main className={`app-shell${isBoxSelecting ? " is-box-selecting" : ""}`}>
+    <main
+      className={mergeClassNames(
+        "app-shell",
+        isBoxSelecting && "is-box-selecting",
+        connectionSourceId !== null && "is-connecting-topics",
+        connectionMode === "click" && "is-click-connecting",
+      )}
+    >
       <section className="canvas-surface" aria-label="Prerequisite graph canvas">
         <ReactFlow
           nodes={renderedNodes}
@@ -174,7 +241,15 @@ function Workspace() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={connect}
-          onPaneClick={clearSelection}
+          onConnectStart={(_, { nodeId, handleType }) => {
+            if (nodeId && handleType === "source") beginConnection(nodeId, "drag");
+          }}
+          onConnectEnd={finishConnectionGesture}
+          isValidConnection={isValidConnection}
+          connectionRadius={48}
+          connectionLineType={ConnectionLineType.SmoothStep}
+          connectOnClick={false}
+          onPaneClick={clearCanvasInteraction}
           onNodeDragStart={beginHistoryTransaction}
           onNodeDragStop={endHistoryTransaction}
           onSelectionStart={startBoxSelection}
@@ -221,7 +296,7 @@ function Workspace() {
               <Network size={24} />
             </div>
             <h1>Start with your first topic</h1>
-            <p>Add a topic, then drag between its handles to define prerequisites.</p>
+            <p>Add topics, then use Connect to choose what each prerequisite unlocks.</p>
             <button type="button" className="primary-button" onClick={addTopic}>
               <Plus size={17} /> Add topic
             </button>
@@ -337,6 +412,22 @@ function Workspace() {
             const item = statusMeta[node.data.status];
             const StatusIcon = item.icon;
             const isAdjacent = !node.selected && adjacentNodeIds.has(node.id);
+            const isConnectionSource = node.id === connectionSourceId;
+            const connectionIssue =
+              connectionSourceId && !isConnectionSource
+                ? getConnectionIssue(edges, connectionSourceId, node.id)
+                : null;
+            const isConnectionCandidate =
+              connectionSourceId !== null && !isConnectionSource && connectionIssue === null;
+            const isConnectionUnavailable =
+              connectionSourceId !== null && !isConnectionSource && connectionIssue !== null;
+            const secondaryLabel = isConnectionSource
+              ? "Connection source"
+              : isConnectionCandidate
+                ? "Connect as unlocked topic"
+                : connectionIssue
+                  ? connectionIssueMeta[connectionIssue].shortLabel
+                  : item.label;
 
             return (
               <button
@@ -345,14 +436,24 @@ function Workspace() {
                 className={mergeClassNames(
                   "topic-list-item",
                   node.selected && "is-selected",
-                  isAdjacent && "is-adjacent",
+                  !connectionSourceId && isAdjacent && "is-adjacent",
+                  isConnectionSource && "is-connection-source",
+                  isConnectionCandidate && "is-connection-candidate",
+                  isConnectionUnavailable && "is-connection-unavailable",
                 )}
-                onClick={(event) =>
+                disabled={isConnectionUnavailable}
+                title={connectionIssue ? connectionIssueMeta[connectionIssue].message : undefined}
+                onClick={(event) => {
+                  if (isConnectionCandidate) {
+                    connectToNode(node.id);
+                    return;
+                  }
+
                   setSelectedNodes(
                     [node.id],
                     event.metaKey || event.ctrlKey || event.shiftKey ? "toggle" : "replace",
-                  )
-                }
+                  );
+                }}
                 role="listitem"
               >
                 <span className={`status-icon status-${node.data.status}`}>
@@ -360,8 +461,11 @@ function Workspace() {
                 </span>
                 <span className="topic-list-copy">
                   <strong>{node.data.label}</strong>
-                  <small>{item.label}</small>
+                  <small>{secondaryLabel}</small>
                 </span>
+                {isConnectionCandidate ? (
+                  <ArrowRight className="topic-list-connect-icon" size={16} aria-hidden="true" />
+                ) : null}
               </button>
             );
           })}
@@ -374,6 +478,23 @@ function Workspace() {
           ) : null}
         </div>
       </aside>
+
+      {connectionSourceNode ? (
+        <div className="connection-guide floating-surface" role="status" aria-live="polite">
+          <span className="connection-guide-icon">
+            <Link2 size={17} aria-hidden="true" />
+          </span>
+          <span className="connection-guide-copy">
+            <strong>{connectionSourceNode.data.label}</strong>
+            <span>is the prerequisite. Choose the topic it unlocks.</span>
+          </span>
+          <button type="button" onClick={cancelConnection} aria-label="Cancel connection">
+            <X size={14} aria-hidden="true" />
+            <span>Cancel</span>
+            <kbd>Esc</kbd>
+          </button>
+        </div>
+      ) : null}
 
       {cycleMessage ? (
         <button className="toast" type="button" onClick={clearCycleMessage}>
