@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">PrereqGraph</title>
+  <rect width="512" height="512" rx="112" fill="#141821"/>
+  <path d="M142 340 256 168l114 172" fill="none" stroke="#84ccff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="142" cy="340" r="52" fill="#f5f8ff" stroke="#84ccff" stroke-width="18"/>
+  <circle cx="256" cy="168" r="52" fill="#f5f8ff" stroke="#84ccff" stroke-width="18"/>
+  <circle cx="370" cy="340" r="52" fill="#f5f8ff" stroke="#84ccff" stroke-width="18"/>
+</svg>
