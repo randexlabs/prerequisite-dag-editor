@@ -7,12 +7,8 @@ import {
   type NodeChange,
 } from "@xyflow/react";
 import { create } from "zustand";
-import {
-  type LearningNode,
-  type LearningNodeData,
-  type PrerequisiteEdge,
-  wouldCreateCycle,
-} from "../domain/graph";
+import { connectionIssueMeta, getConnectionIssue } from "../domain/connection";
+import type { LearningNode, LearningNodeData, PrerequisiteEdge } from "../domain/graph";
 
 const STORAGE_KEY = "prereqgraph-document-v1";
 const HISTORY_LIMIT = 100;
@@ -46,6 +42,7 @@ const initialEdges: PrerequisiteEdge[] = [
 
 type TopicPatch = Partial<Pick<LearningNodeData, "label" | "status">>;
 type SelectionMode = "replace" | "add" | "toggle";
+export type TopicConnectionMode = "click" | "drag";
 
 type GraphSnapshot = {
   nodes: LearningNode[];
@@ -60,6 +57,8 @@ type GraphStore = {
   nodes: LearningNode[];
   edges: PrerequisiteEdge[];
   cycleMessage: string | null;
+  connectionSourceId: string | null;
+  connectionMode: TopicConnectionMode | null;
   past: GraphSnapshot[];
   future: GraphSnapshot[];
   historyTransaction: GraphSnapshot | null;
@@ -67,6 +66,10 @@ type GraphStore = {
   onNodesChange: (changes: NodeChange<LearningNode>[]) => void;
   onEdgesChange: (changes: EdgeChange<PrerequisiteEdge>[]) => void;
   connect: (connection: Connection) => void;
+  beginConnection: (sourceId: string, mode: TopicConnectionMode) => void;
+  connectToNode: (targetId: string) => void;
+  finishConnectionGesture: () => void;
+  cancelConnection: () => void;
   addNode: () => string;
   updateNode: (id: string, patch: TopicPatch) => void;
   deleteNode: (id: string) => void;
@@ -114,6 +117,31 @@ function historyState(state: GraphStore) {
   };
 }
 
+function connectionUpdate(state: GraphStore, connection: Connection): Partial<GraphStore> {
+  if (!connection.source || !connection.target) return {};
+
+  const issue = getConnectionIssue(state.edges, connection.source, connection.target);
+  if (issue) {
+    return { cycleMessage: connectionIssueMeta[issue].message };
+  }
+
+  return {
+    ...historyState(state),
+    documentRevision: state.documentRevision + 1,
+    edges: addEdge(
+      {
+        ...connection,
+        id: crypto.randomUUID(),
+        selected: false,
+      },
+      state.edges,
+    ),
+    cycleMessage: null,
+    connectionSourceId: null,
+    connectionMode: null,
+  };
+}
+
 function loadDocument(): GraphSnapshot {
   if (typeof window === "undefined") {
     return createSnapshot(initialNodes, initialEdges);
@@ -140,6 +168,8 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   nodes: loadedDocument.nodes,
   edges: loadedDocument.edges,
   cycleMessage: null,
+  connectionSourceId: null,
+  connectionMode: null,
   past: [],
   future: [],
   historyTransaction: null,
@@ -161,12 +191,16 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
           : state.edges.filter(
               (edge) => !removedIds.has(edge.source) && !removedIds.has(edge.target),
             );
+      const removedConnectionSource =
+        state.connectionSourceId !== null && removedIds.has(state.connectionSourceId);
 
       return {
         ...(commitsImmediately ? historyState(state) : {}),
         documentRevision: commitsImmediately ? state.documentRevision + 1 : state.documentRevision,
         nodes: nextNodes,
         edges: nextEdges,
+        connectionSourceId: removedConnectionSource ? null : state.connectionSourceId,
+        connectionMode: removedConnectionSource ? null : state.connectionMode,
       };
     }),
 
@@ -180,28 +214,44 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       };
     }),
 
-  connect: (connection) => {
-    if (!connection.source || !connection.target) return;
+  connect: (connection) => set((state) => connectionUpdate(state, connection)),
 
-    if (wouldCreateCycle(get().edges, connection.source, connection.target)) {
-      set({ cycleMessage: "Prerequisite graphs cannot contain cycles." });
-      return;
-    }
+  beginConnection: (sourceId, mode) =>
+    set((state) => {
+      if (!state.nodes.some((node) => node.id === sourceId)) return state;
 
-    set((state) => ({
-      ...historyState(state),
-      documentRevision: state.documentRevision + 1,
-      edges: addEdge(
-        {
-          ...connection,
-          id: crypto.randomUUID(),
-          selected: false,
-        },
-        state.edges,
-      ),
-      cycleMessage: null,
-    }));
+      return {
+        connectionSourceId: sourceId,
+        connectionMode: mode,
+        cycleMessage: null,
+        nodes: state.nodes.map((node) => ({ ...node, selected: node.id === sourceId })),
+        edges: state.edges.map((edge) => ({ ...edge, selected: false })),
+      };
+    }),
+
+  connectToNode: (targetId) => {
+    const sourceId = get().connectionSourceId;
+    if (!sourceId) return;
+
+    set((state) =>
+      connectionUpdate(state, {
+        source: sourceId,
+        sourceHandle: "unlocks-out",
+        target: targetId,
+        targetHandle: "prerequisite-in",
+      }),
+    );
   },
+
+  finishConnectionGesture: () =>
+    set((state) =>
+      state.connectionMode === "drag"
+        ? { connectionSourceId: null, connectionMode: null }
+        : state,
+    ),
+
+  cancelConnection: () =>
+    set({ connectionSourceId: null, connectionMode: null, cycleMessage: null }),
 
   addNode: () => {
     const id = crypto.randomUUID();
@@ -209,6 +259,8 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
     set((state) => ({
       ...historyState(state),
       documentRevision: state.documentRevision + 1,
+      connectionSourceId: null,
+      connectionMode: null,
       nodes: [
         ...state.nodes.map((node) => ({ ...node, selected: false })),
         {
@@ -269,11 +321,15 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
     set((state) => {
       if (!state.nodes.some((node) => node.id === id)) return state;
 
+      const deletesConnectionSource = state.connectionSourceId === id;
+
       return {
         ...historyState(state),
         documentRevision: state.documentRevision + 1,
         nodes: state.nodes.filter((node) => node.id !== id),
         edges: state.edges.filter((edge) => edge.source !== id && edge.target !== id),
+        connectionSourceId: deletesConnectionSource ? null : state.connectionSourceId,
+        connectionMode: deletesConnectionSource ? null : state.connectionMode,
       };
     }),
 
@@ -288,6 +344,9 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
 
       if (selectedNodeIds.size === 0 && selectedEdgeIds.size === 0) return state;
 
+      const deletesConnectionSource =
+        state.connectionSourceId !== null && selectedNodeIds.has(state.connectionSourceId);
+
       return {
         ...historyState(state),
         documentRevision: state.documentRevision + 1,
@@ -298,6 +357,8 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
             !selectedNodeIds.has(edge.source) &&
             !selectedNodeIds.has(edge.target),
         ),
+        connectionSourceId: deletesConnectionSource ? null : state.connectionSourceId,
+        connectionMode: deletesConnectionSource ? null : state.connectionMode,
       };
     }),
 
@@ -365,6 +426,8 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
         historyTransaction: null,
         documentRevision: state.documentRevision + 1,
         cycleMessage: null,
+        connectionSourceId: null,
+        connectionMode: null,
       };
     }),
 
@@ -381,6 +444,8 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
         historyTransaction: null,
         documentRevision: state.documentRevision + 1,
         cycleMessage: null,
+        connectionSourceId: null,
+        connectionMode: null,
       };
     }),
 
