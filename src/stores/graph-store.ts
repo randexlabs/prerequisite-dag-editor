@@ -245,9 +245,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
 
   finishConnectionGesture: () =>
     set((state) =>
-      state.connectionMode === "drag"
-        ? { connectionSourceId: null, connectionMode: null }
-        : state,
+      state.connectionMode === "drag" ? { connectionSourceId: null, connectionMode: null } : state,
     ),
 
   cancelConnection: () =>
