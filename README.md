@@ -85,17 +85,16 @@ The web job validates repository-wide formatting, ESLint, Vitest, the design-tok
 - **Select:** click a topic. Drag with the left mouse button on empty canvas space to select multiple topics.
 - **Move the canvas:** drag with the middle mouse button.
 - **Add to selection:** hold `Ctrl`/`Cmd` while clicking topics.
-- **Connect:** click **Connect** on the prerequisite, then choose the topic it unlocks on the canvas or in the topic browser. For direct manipulation, drag from the right arrow port to the left plus port. Valid targets are highlighted before the connection is committed; duplicate, self-referential, and cyclic targets are unavailable.
-- **Cancel a connection:** press `Escape`, use the contextual **Cancel** action, or click empty canvas space.
+- **Connect:** drag from the right arrow connector of the prerequisite to the left plus connector of the topic it unlocks. Valid targets are highlighted during the drag; duplicate, self-referential, and cyclic targets are unavailable.
 - **Rename:** click the title inside a topic and type. `Enter` commits and `Escape` cancels. The card grows horizontally around its center until the maximum width, then wraps the title and grows vertically.
 - **Duplicate:** select one or more topics and press `Ctrl`/`Cmd+D`. Copies keep their title and mastery state, are offset from the originals, and do not copy connections.
 - **Change mastery:** click the status pill inside a topic and choose another status.
 - **Delete:** select one or more topics or edges and press `Delete`/`Backspace`, or use the trash button.
 - **Undo:** press `Ctrl`/`Cmd+Z` or use the back button.
 - **Redo:** press `Ctrl`/`Cmd+Shift+Z`, `Ctrl+Y`, or use the forward button.
-- **Clear selection:** press `Escape` when no connection is active.
+- **Clear selection:** press `Escape`.
 
-Changes are autosaved locally. There is no explicit save button. Selection and active connection intent are temporary UI state and do not trigger document persistence or add entries to the undo history.
+Changes are autosaved locally. There is no explicit save button. Selection and the temporary drag state are UI-only and do not trigger document persistence or add entries to the undo history.
 
 Deleting a topic also deletes every incoming and outgoing connection attached to it. A single undo step restores the complete deletion.
 
