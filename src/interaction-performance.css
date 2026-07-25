@@ -1,16 +1,68 @@
-.react-flow__selection,
-.react-flow__nodesselection-rect {
+.react-flow__selection {
   contain: layout style paint;
+  border: 1px dashed var(--color-selection-border);
+  background: var(--color-selection-fill);
+  box-shadow: none;
   will-change: transform, width, height;
+}
+
+.react-flow__nodesselection-rect {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  pointer-events: none;
 }
 
 .react-flow__pane.dragging {
   cursor: grabbing;
 }
 
+.topic-node-card.is-selected {
+  background: var(--color-node-selected-surface);
+}
+
+.react-flow__node.is-adjacent-node .topic-node-card {
+  outline: 1px solid var(--color-adjacent);
+  outline-offset: 2px;
+  background: var(--color-node-adjacent-surface);
+  box-shadow: var(--shadow-node-adjacent);
+}
+
+.react-flow__edge.is-adjacent-edge .react-flow__edge-path {
+  stroke: var(--color-adjacent);
+  stroke-width: 3;
+}
+
+.topic-list-item.is-adjacent:not(.is-selected) {
+  border-color: var(--color-adjacent-soft);
+  background: var(--color-adjacent-soft);
+}
+
+.topic-node-title {
+  width: calc(100% + 16px);
+  margin: -4px -8px 0;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-node-title-surface);
+}
+
+.topic-node-title:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+  background: var(--color-node-title-hover);
+}
+
+.topic-title-input {
+  width: calc(100% + 16px);
+  margin: -4px -8px 0;
+  background: var(--color-node-title-surface);
+}
+
 .app-shell.is-box-selecting .topic-node-card,
 .app-shell.is-box-selecting .topic-node-card:hover,
-.app-shell.is-box-selecting .topic-node-card.is-selected {
+.app-shell.is-box-selecting .topic-node-card.is-selected,
+.app-shell.is-box-selecting .react-flow__node.is-adjacent-node .topic-node-card {
+  outline: 0;
   box-shadow: none;
   transform: none;
   transition: none;
