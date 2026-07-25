@@ -4,18 +4,30 @@ const baseSha = process.env.FORMAT_BASE_SHA;
 const headSha = process.env.FORMAT_HEAD_SHA ?? "HEAD";
 const isMissingBase = !baseSha || /^0+$/.test(baseSha);
 
-const output = isMissingBase
-  ? execFileSync("git", ["ls-files"], { encoding: "utf8" })
-  : execFileSync(
+function listChangedFiles() {
+  if (!isMissingBase) {
+    return execFileSync(
       "git",
       ["diff", "--name-only", "--diff-filter=ACMR", baseSha, headSha],
       { encoding: "utf8" },
     );
+  }
+
+  try {
+    return execFileSync(
+      "git",
+      ["diff", "--name-only", "--diff-filter=ACMR", `${headSha}^`, headSha],
+      { encoding: "utf8" },
+    );
+  } catch {
+    return execFileSync("git", ["ls-files"], { encoding: "utf8" });
+  }
+}
 
 const supportedFile = /\.(?:[cm]?[jt]sx?|json|css|scss|md|mdx|ya?ml|html)$/u;
 const ignoredPaths = ["dist/", "node_modules/", "src-tauri/icons/", "src-tauri/target/"];
 
-const files = output
+const files = listChangedFiles()
   .split(/\r?\n/u)
   .map((file) => file.trim())
   .filter(Boolean)
