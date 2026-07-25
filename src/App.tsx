@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -9,6 +9,7 @@ import {
   ReactFlowProvider,
   SelectionMode,
   useReactFlow,
+  type DefaultEdgeOptions,
 } from "@xyflow/react";
 import {
   ListTree,
@@ -32,6 +33,18 @@ import { statusMeta } from "./components/status-meta";
 import { useGraphStore } from "./stores/graph-store";
 
 const nodeTypes = { topic: TopicNode };
+const fitViewOptions = { padding: 0.24 } as const;
+const connectionLineStyle = {
+  stroke: "var(--color-accent)",
+  strokeWidth: 2,
+} as const;
+const defaultEdgeOptions: DefaultEdgeOptions = {
+  type: "smoothstep",
+  markerEnd: { type: MarkerType.ArrowClosed },
+  style: { stroke: "var(--color-edge)", strokeWidth: 2 },
+  interactionWidth: 20,
+};
+
 type Theme = "light" | "dark";
 
 function getInitialTheme(): Theme {
@@ -64,12 +77,9 @@ function Workspace() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const [browserOpen, setBrowserOpen] = useState(true);
   const [minimapOpen, setMinimapOpen] = useState(false);
+  const [isBoxSelecting, setIsBoxSelecting] = useState(false);
   const [query, setQuery] = useState("");
 
-  const displayedNodes = useMemo(
-    () => nodes.map((node) => ({ ...node, type: "topic" })),
-    [nodes],
-  );
   const filteredNodes = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
     if (!normalizedQuery) return nodes;
@@ -78,6 +88,13 @@ function Workspace() {
   const selectedNodeCount = nodes.filter((node) => node.selected).length;
   const selectedEdgeCount = edges.filter((edge) => edge.selected).length;
   const selectedElementCount = selectedNodeCount + selectedEdgeCount;
+
+  const startBoxSelection = useCallback(() => setIsBoxSelecting(true), []);
+  const finishBoxSelection = useCallback(() => setIsBoxSelecting(false), []);
+  const minimapNodeColor = useCallback(
+    (node: (typeof nodes)[number]) => `var(--color-status-${node.data.status ?? "unknown"})`,
+    [],
+  );
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -149,10 +166,10 @@ function Workspace() {
   };
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell${isBoxSelecting ? " is-box-selecting" : ""}`}>
       <section className="canvas-surface" aria-label="Prerequisite graph canvas">
         <ReactFlow
-          nodes={displayedNodes}
+          nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
           colorMode={theme}
@@ -162,23 +179,25 @@ function Workspace() {
           onPaneClick={clearSelection}
           onNodeDragStart={beginHistoryTransaction}
           onNodeDragStop={endHistoryTransaction}
+          onSelectionStart={startBoxSelection}
+          onSelectionEnd={finishBoxSelection}
           deleteKeyCode={null}
+          selectionKeyCode={null}
           selectionOnDrag
-          selectionMode={SelectionMode.Partial}
-          panOnDrag={false}
+          selectionMode={SelectionMode.Full}
+          panOnDrag={[1]}
+          panActivationKeyCode="Space"
           panOnScroll
+          autoPanOnSelection={false}
+          elevateNodesOnSelect={false}
+          onlyRenderVisibleElements
           multiSelectionKeyCode={["Meta", "Control"]}
           minZoom={0.2}
           maxZoom={2.2}
           fitView
-          fitViewOptions={{ padding: 0.24 }}
-          connectionLineStyle={{ stroke: "var(--color-accent)", strokeWidth: 2 }}
-          defaultEdgeOptions={{
-            type: "smoothstep",
-            markerEnd: { type: MarkerType.ArrowClosed },
-            style: { stroke: "var(--color-edge)", strokeWidth: 2 },
-            interactionWidth: 20,
-          }}
+          fitViewOptions={fitViewOptions}
+          connectionLineStyle={connectionLineStyle}
+          defaultEdgeOptions={defaultEdgeOptions}
         >
           <Background
             variant={BackgroundVariant.Dots}
@@ -193,7 +212,7 @@ function Workspace() {
               pannable
               zoomable
               nodeStrokeWidth={3}
-              nodeColor={(node) => `var(--color-status-${node.data.status ?? "unknown"})`}
+              nodeColor={minimapNodeColor}
             />
           ) : null}
         </ReactFlow>
@@ -370,9 +389,9 @@ function Workspace() {
       ) : null}
 
       <div className="canvas-hint floating-surface">
-        <span>Drag empty space to select</span>
+        <span>Left drag to select</span>
+        <span>Middle drag to pan</span>
         <span><kbd>Space</kbd> + drag to pan</span>
-        <span><kbd>Ctrl/Cmd</kbd> + click to add</span>
       </div>
 
       {cycleMessage ? (
