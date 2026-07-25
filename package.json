@@ -17,7 +17,7 @@
     "lint:fix": "eslint . --fix",
     "design:check": "node scripts/check-design-tokens.mjs",
     "build": "pnpm design:check && tsc -b && vite build",
-    "check:web": "pnpm format:check:changed && pnpm lint && pnpm test && pnpm build",
+    "check:web": "pnpm format:check && pnpm lint && pnpm test && pnpm build",
     "check:rust": "pnpm rust:fmt:check && pnpm rust:clippy && pnpm rust:test",
     "check": "pnpm check:web && pnpm check:rust",
     "preview": "vite preview",
