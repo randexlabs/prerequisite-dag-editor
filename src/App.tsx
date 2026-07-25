@@ -298,7 +298,12 @@ function Workspace() {
           <Redo2 size={18} />
         </button>
         <span className="dock-divider" />
-        <button type="button" className="tool-button is-active" aria-label="Select tool" title="Select">
+        <button
+          type="button"
+          className="tool-button is-active"
+          aria-label="Select tool"
+          title="Select"
+        >
           <MousePointer2 size={18} />
           <kbd>1</kbd>
         </button>

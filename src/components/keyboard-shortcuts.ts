@@ -11,12 +11,7 @@ type WorkspaceShortcutContext = {
 };
 
 export type WorkspaceShortcut =
-  | "undo"
-  | "redo"
-  | "clear-selection"
-  | "delete-selection"
-  | "add-topic"
-  | null;
+  "undo" | "redo" | "clear-selection" | "delete-selection" | "add-topic" | null;
 
 export function isDuplicateShortcut(event: DuplicateShortcutEvent): boolean {
   return (event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "d";
