@@ -2,12 +2,14 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import process from "node:process";
 
-const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const isWindows = process.platform === "win32";
 const tauriArgs = process.argv.slice(2);
 const iconPath = new URL("../src-tauri/icons/icon.ico", import.meta.url);
 
 function run(args) {
-  const result = spawnSync(pnpm, args, {
+  const command = isWindows ? (process.env.ComSpec ?? "cmd.exe") : "pnpm";
+  const commandArgs = isWindows ? ["/d", "/s", "/c", "pnpm", ...args] : args;
+  const result = spawnSync(command, commandArgs, {
     cwd: process.cwd(),
     stdio: "inherit",
   });
