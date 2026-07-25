@@ -28,11 +28,15 @@
 
 .topic-node-card {
   min-width: 218px;
+  min-height: 96px;
   max-width: 420px;
+  padding: var(--space-4);
   transition:
     width var(--duration-fast) var(--easing-standard),
     border-color var(--duration-fast) var(--easing-standard),
+    background var(--duration-fast) var(--easing-standard),
     box-shadow var(--duration-normal) var(--easing-standard),
+    opacity var(--duration-fast) var(--easing-standard),
     transform var(--duration-fast) var(--easing-standard);
 }
 
@@ -88,10 +92,258 @@
   overflow-wrap: anywhere;
 }
 
+.topic-node-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.topic-connect-action {
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  background: var(--color-surface-raised);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--easing-standard),
+    border-color var(--duration-fast) var(--easing-standard),
+    background var(--duration-fast) var(--easing-standard),
+    box-shadow var(--duration-fast) var(--easing-standard);
+}
+
+.topic-connect-action:hover:not(:disabled) {
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  box-shadow: 0 0 0 2px var(--color-accent-soft);
+}
+
+.topic-connect-action.is-active {
+  color: var(--color-accent-contrast);
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.topic-handle {
+  top: 50%;
+  width: var(--control-sm) !important;
+  height: var(--control-sm) !important;
+  min-width: var(--control-sm) !important;
+  min-height: var(--control-sm) !important;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius-pill);
+  opacity: 1;
+  transform: translateY(-50%) !important;
+  z-index: 8;
+  transition:
+    color var(--duration-fast) var(--easing-standard),
+    border-color var(--duration-fast) var(--easing-standard),
+    background var(--duration-fast) var(--easing-standard),
+    box-shadow var(--duration-fast) var(--easing-standard),
+    opacity var(--duration-fast) var(--easing-standard);
+}
+
+.topic-handle-target {
+  left: -16px;
+  color: var(--color-accent);
+  background: var(--color-surface);
+}
+
+.topic-handle-source {
+  right: -16px;
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+}
+
+.topic-handle-icon {
+  pointer-events: none;
+}
+
+.topic-handle:hover,
+.topic-handle.connecting {
+  width: var(--control-sm) !important;
+  height: var(--control-sm) !important;
+  opacity: 1;
+  transform: translateY(-50%) !important;
+  box-shadow: 0 0 0 4px var(--color-accent-soft);
+}
+
+.topic-handle-target.connecting:not(.valid) {
+  color: var(--color-text-subtle);
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+  box-shadow: none;
+}
+
+.topic-handle-target.connecting.valid {
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+  box-shadow: var(--shadow-node-selected);
+}
+
+.react-flow__node.is-connection-source .topic-node-card {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  background: var(--color-node-selected-surface);
+  box-shadow: var(--shadow-node-selected);
+}
+
+.react-flow__node.is-connection-candidate .topic-node-card {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  box-shadow: var(--shadow-node-adjacent);
+}
+
+.react-flow__node.is-connection-unavailable .topic-node-card {
+  opacity: 0.38;
+  box-shadow: none;
+}
+
+.app-shell.is-connecting-topics .react-flow__edge {
+  opacity: 0.32;
+}
+
+.topic-connect-target {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 2px solid var(--color-accent);
+  border-radius: inherit;
+  color: var(--color-accent-text);
+  background: var(--color-accent-soft);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--easing-standard),
+    background var(--duration-fast) var(--easing-standard),
+    box-shadow var(--duration-fast) var(--easing-standard);
+}
+
+.topic-connect-target:hover,
+.topic-connect-target:focus-visible {
+  color: var(--color-text);
+  background: var(--color-surface-active);
+  box-shadow: inset 0 0 0 2px var(--color-accent-soft);
+}
+
+.topic-connect-target-icon,
+.connection-guide-icon {
+  width: var(--control-sm);
+  height: var(--control-sm);
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+}
+
+.topic-connect-target > span:last-child,
+.connection-guide-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.topic-connect-target strong,
+.connection-guide-copy strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topic-connect-target small,
+.connection-guide-copy > span {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.connection-guide {
+  top: 72px;
+  left: 50%;
+  max-width: min(540px, calc(100vw - 32px));
+  min-height: var(--control-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  transform: translateX(-50%);
+}
+
+.connection-guide-copy {
+  flex: 1;
+}
+
+.connection-guide button {
+  min-height: var(--control-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.connection-guide button:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.topic-list-item.is-connection-source {
+  border-color: var(--color-accent);
+  background: var(--color-node-selected-surface);
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.topic-list-item.is-connection-candidate {
+  border-color: var(--color-accent);
+  color: var(--color-accent-text);
+  background: var(--color-accent-soft);
+}
+
+.topic-list-item.is-connection-candidate:hover {
+  background: var(--color-surface-active);
+}
+
+.topic-list-item.is-connection-unavailable {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.topic-list-connect-icon {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
 .app-shell.is-box-selecting .topic-node-card,
 .app-shell.is-box-selecting .topic-node-card:hover,
 .app-shell.is-box-selecting .topic-node-card.is-selected,
-.app-shell.is-box-selecting .react-flow__node.is-adjacent-node .topic-node-card {
+.app-shell.is-box-selecting .react-flow__node.is-adjacent-node .topic-node-card,
+.app-shell.is-box-selecting .react-flow__node.is-connection-source .topic-node-card,
+.app-shell.is-box-selecting .react-flow__node.is-connection-candidate .topic-node-card {
   outline: 0;
   box-shadow: none;
   transform: none;
@@ -102,4 +354,12 @@
 .app-shell.is-box-selecting .react-flow__edge-path,
 .app-shell.is-box-selecting .topic-handle {
   transition: none;
+}
+
+@media (max-width: 620px) {
+  .connection-guide-copy > span,
+  .connection-guide button span,
+  .connection-guide button kbd {
+    display: none;
+  }
 }
