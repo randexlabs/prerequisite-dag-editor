@@ -1,0 +1,56 @@
+name: Cleanup generated artifacts once
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cleanup-generated-artifacts-once
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Remove generated artifacts and update ignore rules
+        shell: bash
+        run: |
+          rm -rf .ci src-tauri/gen
+
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.gitignore')
+          lines = path.read_text(encoding='utf-8').splitlines()
+          required = ['.ci/', 'src-tauri/gen/']
+
+          for entry in required:
+              if entry not in lines:
+                  lines.append(entry)
+
+          path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+
+          if git diff --cached --quiet; then
+            echo "No generated artifacts are tracked."
+          else
+            git commit -m "chore: remove generated repository artifacts"
+            git push
+          fi
