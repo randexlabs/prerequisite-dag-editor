@@ -11,12 +11,7 @@ type WorkspaceShortcutContext = {
 };
 
 export type WorkspaceShortcut =
-  | "undo"
-  | "redo"
-  | "clear-selection"
-  | "delete-selection"
-  | "add-topic"
-  | null;
+  "undo" | "redo" | "clear-selection" | "delete-selection" | "add-topic" | null;
 
 export function isDuplicateShortcut(event: DuplicateShortcutEvent): boolean {
   return (event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "d";
@@ -42,10 +37,7 @@ export function getWorkspaceShortcut(
   if (modifier || event.altKey) return null;
   if (event.key === "Escape") return "clear-selection";
 
-  if (
-    context.hasSelection &&
-    (event.key === "Delete" || event.key === "Backspace")
-  ) {
+  if (context.hasSelection && (event.key === "Delete" || event.key === "Backspace")) {
     return "delete-selection";
   }
 

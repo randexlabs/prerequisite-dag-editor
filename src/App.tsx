@@ -125,9 +125,7 @@ function Workspace() {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const action = getWorkspaceShortcut(event, {
-        isEditing: Boolean(
-          target?.matches("input, textarea, select, [contenteditable='true']"),
-        ),
+        isEditing: Boolean(target?.matches("input, textarea, select, [contenteditable='true']")),
         hasSelection: selectedElementCount > 0,
       });
 
