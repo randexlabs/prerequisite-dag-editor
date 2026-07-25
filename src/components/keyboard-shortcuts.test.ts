@@ -12,7 +12,7 @@ describe("keyboard shortcuts", () => {
   });
 
   it("keeps only essential workspace shortcuts", () => {
-    const context = { isEditing: false, hasSelection: true };
+    const context = { isEditing: false, hasSelection: true, hasPendingConnection: false };
 
     expect(
       getWorkspaceShortcut(
@@ -52,8 +52,17 @@ describe("keyboard shortcuts", () => {
     ).toBe("add-topic");
   });
 
+  it("uses Escape to cancel connection mode before clearing selection", () => {
+    expect(
+      getWorkspaceShortcut(
+        { key: "Escape", ctrlKey: false, metaKey: false, shiftKey: false, altKey: false },
+        { isEditing: false, hasSelection: true, hasPendingConnection: true },
+      ),
+    ).toBe("cancel-connection");
+  });
+
   it("does not reserve fit-view or keyboard-pan shortcuts", () => {
-    const context = { isEditing: false, hasSelection: false };
+    const context = { isEditing: false, hasSelection: false, hasPendingConnection: false };
 
     expect(
       getWorkspaceShortcut(
@@ -73,7 +82,7 @@ describe("keyboard shortcuts", () => {
     expect(
       getWorkspaceShortcut(
         { key: "n", ctrlKey: false, metaKey: false, shiftKey: false, altKey: false },
-        { isEditing: true, hasSelection: false },
+        { isEditing: true, hasSelection: false, hasPendingConnection: false },
       ),
     ).toBeNull();
   });
