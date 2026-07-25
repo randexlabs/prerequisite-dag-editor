@@ -8,13 +8,11 @@ type WorkspaceShortcutEvent = Pick<
 type WorkspaceShortcutContext = {
   isEditing: boolean;
   hasSelection: boolean;
-  hasPendingConnection: boolean;
 };
 
 export type WorkspaceShortcut =
   | "undo"
   | "redo"
-  | "cancel-connection"
   | "clear-selection"
   | "delete-selection"
   | "add-topic"
@@ -42,10 +40,7 @@ export function getWorkspaceShortcut(
   }
 
   if (modifier || event.altKey) return null;
-
-  if (event.key === "Escape") {
-    return context.hasPendingConnection ? "cancel-connection" : "clear-selection";
-  }
+  if (event.key === "Escape") return "clear-selection";
 
   if (context.hasSelection && (event.key === "Delete" || event.key === "Backspace")) {
     return "delete-selection";
