@@ -10,7 +10,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "design:check": "node scripts/check-design-tokens.mjs",
+    "build": "pnpm design:check && tsc -b && vite build",
+    "check": "pnpm test && pnpm build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
