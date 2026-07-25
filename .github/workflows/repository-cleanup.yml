@@ -35,65 +35,55 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install Tauri Linux dependencies
+      - name: Run cleanup and capture diagnostics
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential \
-            libayatana-appindicator3-dev \
-            libgtk-3-dev \
-            librsvg2-dev \
-            libssl-dev \
-            libwebkit2gtk-4.1-dev \
-            patchelf
+          set +e
+          mkdir -p .ci
+          report=.ci/cleanup-report.md
+          : > "$report"
 
-      - name: Install dependencies and refresh lockfile
-        run: pnpm install --no-frozen-lockfile
+          printf '# Repository cleanup report\n\n' >> "$report"
+          printf 'Commit: `%s`\n\n' "$GITHUB_SHA" >> "$report"
 
-      - name: Install Rust components
-        run: rustup component add clippy rustfmt
+          run_step() {
+            name="$1"
+            shift
+            log="$(mktemp)"
+            printf '## %s\n\n```text\n' "$name" >> "$report"
+            "$@" >"$log" 2>&1
+            code=$?
+            cat "$log" >> "$report"
+            printf '\n```\n\nExit code: `%s`\n\n' "$code" >> "$report"
+            rm -f "$log"
+            return 0
+          }
 
-      - name: Generate Tauri icons
-        run: pnpm icons
+          run_shell_step() {
+            name="$1"
+            command="$2"
+            run_step "$name" bash -o pipefail -c "$command"
+          }
 
-      - name: Apply web formatting and safe lint fixes
-        run: |
-          pnpm format
-          pnpm lint:fix
-          pnpm format
+          run_shell_step "Install Linux dependencies" "sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential libayatana-appindicator3-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev patchelf"
+          run_step "Install dependencies" pnpm install --no-frozen-lockfile
+          run_step "Install Rust components" rustup component add clippy rustfmt
+          run_step "Generate Tauri icons" pnpm icons
+          run_step "Prettier write" pnpm format
+          run_step "ESLint fix" pnpm lint:fix
+          run_step "Prettier write after ESLint" pnpm format
+          run_step "Rustfmt write" pnpm rust:fmt
+          run_step "Prettier check" pnpm format:check
+          run_step "ESLint check" pnpm lint
+          run_step "Web tests" pnpm test
+          run_step "Web build" pnpm build
+          run_step "Rustfmt check" pnpm rust:fmt:check
+          run_step "Clippy" pnpm rust:clippy
+          run_step "Rust tests" pnpm rust:test
+          run_step "Git diff summary" git diff --stat
 
-      - name: Apply Rust formatting
-        run: pnpm rust:fmt
-
-      - name: Commit mechanical cleanup
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add --all
-          if git diff --cached --quiet; then
-            echo "Repository already formatted."
-          else
-            git commit -m "style: format repository and refresh lockfiles"
-            git push
-          fi
-
-      - name: Check formatting
-        run: pnpm format:check
-
-      - name: Run ESLint
-        run: pnpm lint
-
-      - name: Run web tests
-        run: pnpm test
-
-      - name: Build web application
-        run: pnpm build
-
-      - name: Check Rust formatting
-        run: pnpm rust:fmt:check
-
-      - name: Run Clippy
-        run: pnpm rust:clippy
-
-      - name: Run Rust tests
-        run: pnpm rust:test
+          git commit -m "chore: apply automated repository cleanup"
+          git push
