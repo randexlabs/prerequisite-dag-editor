@@ -52,18 +52,15 @@ jobs:
 
           path = Path('src/styles.css')
           css = path.read_text(encoding='utf-8')
-
           css = re.sub(r'^\s*--xy-controls-button-[^\n]+\n', '', css, flags=re.MULTILINE)
 
-          blocks = [
+          for pattern in (
               r'\n\.react-flow__attribution \{.*?\n\}\n',
               r'\n\.brand-pill \{.*?\n\}\n\n\.brand-mark \{.*?\n\}\n\n\.brand-copy \{.*?\n\}\n\n\.brand-copy strong \{.*?\n\}\n\n\.brand-copy span \{.*?\n\}\n',
               r'\n\.canvas-controls \{.*?\n\}\n\n\.canvas-controls button \{.*?\n\}\n\n\.canvas-controls button:hover \{.*?\n\}\n\n\.canvas-controls svg \{.*?\n\}\n',
               r'\n\.canvas-hint \{.*?\n\}\n\n\.canvas-hint span \{.*?\n\}\n',
               r'\n@media \(max-width: 980px\) \{.*?\n\}\n',
-          ]
-
-          for pattern in blocks:
+          ):
               css = re.sub(pattern, '\n', css, count=1, flags=re.DOTALL)
 
           css = css.replace(
@@ -80,35 +77,28 @@ jobs:
           path.write_text(css, encoding='utf-8')
           PY
 
-      - name: Delete obsolete branch
-        shell: bash
+      - name: Verify obsolete branch is gone
         run: |
-          if git ls-remote --exit-code --heads origin agent/initial-project-setup >/dev/null 2>&1; then
-            git push origin --delete agent/initial-project-setup
-          fi
-
           if git ls-remote --exit-code --heads origin agent/initial-project-setup >/dev/null 2>&1; then
             echo 'Obsolete branch still exists.' >&2
             exit 1
           fi
 
-      - name: Restore permanent workflows and format
+      - name: Format source
         run: |
-          git show 991e907d3403a755ecffc0cf3b0d6fdb29da7a5e:.github/workflows/ci.yml > .github/workflows/ci.yml
-          rm -f .github/workflows/finalize-ui-cleanup.yml
           pnpm format
           pnpm rust:fmt
 
-      - name: Create final commit
+      - name: Commit formatted source
         id: commit
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add --all
+          git add --all -- . ':(exclude).github/workflows/**'
 
           if ! git diff --cached --quiet; then
-            git commit -m 'chore: finalize canvas cleanup'
+            git commit -m 'style: format simplified canvas UI'
             git push
           fi
 
@@ -121,7 +111,7 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Check out final commit
+      - name: Check out formatted source
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.cleanup.outputs.sha }}
@@ -159,7 +149,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Check out final commit
+      - name: Check out formatted source
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.cleanup.outputs.sha }}
