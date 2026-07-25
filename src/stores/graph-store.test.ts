@@ -37,6 +37,8 @@ describe("graph editing", () => {
       nodes: structuredClone(nodes),
       edges: structuredClone(edges),
       cycleMessage: null,
+      connectionSourceId: null,
+      connectionMode: null,
       past: [],
       future: [],
       historyTransaction: null,
@@ -131,5 +133,45 @@ describe("graph editing", () => {
     expect(useGraphStore.getState().nodes.find((node) => node.id === "b")?.data.label).toBe(
       "Topic B",
     );
+  });
+
+  it("connects a prerequisite by choosing the whole target topic", () => {
+    const store = useGraphStore.getState();
+    store.beginConnection("a", "click");
+
+    expect(useGraphStore.getState().connectionSourceId).toBe("a");
+    expect(useGraphStore.getState().nodes.find((node) => node.id === "a")?.selected).toBe(true);
+
+    store.connectToNode("c");
+    const state = useGraphStore.getState();
+
+    expect(state.edges.some((edge) => edge.source === "a" && edge.target === "c")).toBe(true);
+    expect(state.connectionSourceId).toBeNull();
+    expect(state.connectionMode).toBeNull();
+    expect(state.past).toHaveLength(1);
+    expect(state.documentRevision).toBe(1);
+  });
+
+  it("keeps click connection mode active after rejecting a cycle", () => {
+    const store = useGraphStore.getState();
+    store.beginConnection("c", "click");
+    store.connectToNode("a");
+    const state = useGraphStore.getState();
+
+    expect(state.edges).toEqual(edges);
+    expect(state.connectionSourceId).toBe("c");
+    expect(state.connectionMode).toBe("click");
+    expect(state.cycleMessage).toBe("That connection would create a cycle.");
+    expect(state.past).toHaveLength(0);
+    expect(state.documentRevision).toBe(0);
+  });
+
+  it("clears temporary drag connection state when the gesture ends", () => {
+    const store = useGraphStore.getState();
+    store.beginConnection("a", "drag");
+    store.finishConnectionGesture();
+
+    expect(useGraphStore.getState().connectionSourceId).toBeNull();
+    expect(useGraphStore.getState().connectionMode).toBeNull();
   });
 });
